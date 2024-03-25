@@ -1,1 +1,3 @@
-##Auth service made with Rust
+## Rust Auth Service
+
+Implements actix-web server
