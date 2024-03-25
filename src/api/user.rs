@@ -45,44 +45,44 @@ pub async fn get_user_by_id(
     }
 }
 
-pub async fn login_google_user(
-    db: web::Data<Mongo>,
-    form: web::Json<LoginForm>
-) -> Result<HttpResponse, Error> {
-    let client_id: String = env
-        ::var("GOOGLE_CLIENT_ID")
-        .expect("GOOGLE_CLIENT_ID environment variable not set");
-    let name = form.name.clone();
-    let email = Email::parse(&form.email.clone())?;
-    let id_token = form.id_token.clone();
-    let client = AsyncClient::new(client_id);
-    let payload_result = client.validate_id_token(id_token).await;
+// pub async fn login_google_user(
+//     db: web::Data<Mongo>,
+//     form: web::Json<LoginForm>
+// ) -> Result<HttpResponse, Error> {
+//     let client_id: String = env
+//         ::var("GOOGLE_CLIENT_ID")
+//         .expect("GOOGLE_CLIENT_ID environment variable not set");
+//     let name = form.name.clone();
+//     let email = Email::parse(&form.email.clone())?;
+//     let id_token = form.id_token.clone();
+//     let client = AsyncClient::new(client_id);
+//     let payload_result = client.validate_id_token(id_token).await;
 
-    let payload = match payload_result {
-        Ok(payload) => payload,
-        Err(_) => {
-            return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
-        }
-    };
+//     let payload = match payload_result {
+//         Ok(payload) => payload,
+//         Err(_) => {
+//             return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
+//         }
+//     };
 
-    if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
-        return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
-    }
+//     if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
+//         return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
+//     }
 
-    let user = db.get_user_by_email(form.email.clone());
+//     let user = db.get_user_by_email(form.email.clone());
 
-    match user {
-        Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),
-        Ok(None) => {
-            let user = User::new(name, email);
-            match db.create_user(user) {
-                Ok(insert_result) => {
-                    let user = db.get_user_by_id(insert_result.inserted_id);
-                    Ok(HttpResponse::Ok().json(user)
-                },
-                Err(_) => Err(ServiceError::BadRequest(String::from("oh no")).into()),
-            }
-        }
-        Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
-    }
-}
+//     match user {
+//         Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),
+//         Ok(None) => {
+//             let user = User::new(name, email);
+//             match db.create_user(user) {
+//                 Ok(insert_result) => {
+//                     let user = db.get_user_by_id(insert_result.inserted_id);
+//                     Ok(HttpResponse::Ok().json(user)
+//                 },
+//                 Err(_) => Err(ServiceError::BadRequest(String::from("oh no")).into()),
+//             }
+//         }
+//         Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
+//     }
+// }
