@@ -1,0 +1,26 @@
+[package]
+name = "rust_auth_service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+env_logger = "0.10.0"
+dotenv = "0.15.0"
+actix-web = "4.5.1"
+bcrypt = "0.10.0"
+google-oauth = { version = "1" }
+serde_json = "1.0"
+regex = "1.6"
+async-trait = "0.1.78"
+derive_more = "0.99.17"
+json = "0.12.4"
+serde = { version = "1.0.197", features = ["derive"] } 
+uuid = "1.8.0"
+validator = { version="0.17.0", features = ["derive"] }
+
+[dependencies.mongodb]
+version = "2.2.0"
+default-features = false
+features = ["sync"]
