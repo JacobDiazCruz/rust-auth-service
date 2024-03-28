@@ -5,9 +5,11 @@ use crate::{
     models::user_model::{ User, Email },
     helpers::errors::ServiceError,
     helpers::form_data::{ FormData, LoginForm },
-    helpers::obj_id_converter::{ Converter },
+    helpers::obj_id_converter::Converter,
+    helpers::jwt::sign_jwt,
 };
 use std::env;
+use serde_json::json;
 use google_oauth::{ AsyncClient, GooglePayload };
 
 pub async fn create_user(
@@ -42,7 +44,7 @@ pub async fn login_google_user(
     form: web::Json<LoginForm>
 ) -> Result<HttpResponse, ServiceError> {
     let name = form.name.clone();
-    let email = Email::parse(String::from(form.email))?;
+    let email = Email::parse(String::from(&form.email))?;
     let id_token = form.id_token.clone();
     let payload = check_payload(id_token).await?;
 
@@ -60,8 +62,13 @@ pub async fn login_google_user(
                 Ok(insert_result) => {
                     let obj_id = Converter::string_to_bson(insert_result.inserted_id.to_string())?;
                     let user_details = db.get_user_by_id(obj_id);
+                    let access_token = sign_jwt()?;
+                    let response =
+                        json!({
+                            "access_token": access_token
+                        });
                     match user_details {
-                        Ok(Some(user_details_data)) => Ok(HttpResponse::Ok().json(user_details)),
+                        Ok(Some(_)) => Ok(HttpResponse::Ok().json(response)),
                         Ok(None) =>
                             Err(ServiceError::BadRequest("User does not exist.".to_string())),
                         Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
