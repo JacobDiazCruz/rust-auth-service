@@ -5,7 +5,6 @@ use mongodb::{
 };
 use std::env;
 use crate::models::user_model::User;
-use crate::models::user_model::Email;
 
 pub struct Mongo {
     col: Collection<User>,

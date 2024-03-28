@@ -14,7 +14,7 @@ pub async fn create_user(
     db: web::Data<Mongo>,
     form: web::Json<FormData>
 ) -> Result<web::Json<InsertOneResult>, Error> {
-    let email = Email::parse(&form.email.clone())?;
+    let email = Email::parse(String::from(&form.email))?;
     let name = form.name.clone();
     let user = User::new(name, email);
 
@@ -42,7 +42,7 @@ pub async fn login_google_user(
     form: web::Json<LoginForm>
 ) -> Result<HttpResponse, ServiceError> {
     let name = form.name.clone();
-    let email = Email::parse(&form.email.clone())?;
+    let email = Email::parse(String::from(form.email))?;
     let id_token = form.id_token.clone();
     let payload = check_payload(id_token).await?;
 

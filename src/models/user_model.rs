@@ -1,8 +1,6 @@
-use actix_web::error::ResponseError;
 use mongodb::bson::oid::ObjectId;
 use serde::{ Serialize, Deserialize };
 use crate::{ helpers::errors::ServiceError };
-use std::fmt;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
@@ -12,23 +10,13 @@ pub struct User {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Email(String);
-#[derive(Debug)]
-pub struct AuthError(String);
-
-impl fmt::Display for AuthError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl ResponseError for AuthError {}
 
 impl Email {
-    pub fn parse(email: &str) -> Result<Email, ServiceError> {
+    pub fn parse(email: String) -> Result<Email, ServiceError> {
         if email.is_empty() {
             Err(ServiceError::BadRequest("Email is required.".to_string()))
         } else {
-            Ok(Email(email.to_string()))
+            Ok(Email(email))
         }
     }
 
