@@ -1,3 +1,4 @@
+use actix_web::http::header::HeaderValue;
 use hmac::{ Hmac, Mac };
 use jwt::{ AlgorithmType, Header, SignWithKey, Token };
 use sha2::Sha384;
@@ -26,4 +27,26 @@ pub fn sign_jwt() -> Result<String, ServiceError> {
         .map_err(|e| ServiceError::BadRequest(format!("Token signing error: {:?}", e)))?;
 
     Ok(token_str.into())
+}
+
+pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<&str, ServiceError> {
+    if auth_header.is_none() {
+        return Err(ServiceError::BadRequest(String::from("No auth header.")));
+    }
+    let auth_str = auth_header
+        .unwrap()
+        .to_str()
+        .map_err(|_| ServiceError::BadRequest(String::from("Invalid auth header.")))?;
+
+    if !auth_str.starts_with("Bearer ") {
+        return Err(ServiceError::BadRequest("Invalid auth header format.".to_string()));
+    }
+
+    let parts: Vec<&str> = auth_str.split_whitespace().collect();
+
+    if let Some(token) = parts.get(1) {
+        return Ok(token);
+    } else {
+        Err(ServiceError::BadRequest("Invalid auth header format.".to_string()))
+    }
 }

@@ -6,7 +6,7 @@ use crate::{
     helpers::errors::ServiceError,
     helpers::form_data::{ FormData, LoginForm },
     helpers::obj_id_converter::Converter,
-    helpers::jwt::sign_jwt,
+    helpers::jwt::{ sign_jwt, get_token },
 };
 use std::env;
 use serde_json::json;
@@ -100,31 +100,22 @@ pub async fn logout_user(
     db: web::Data<Mongo>,
     req: HttpRequest
 ) -> Result<HttpResponse, ServiceError> {
-    let auth_header = req.headers().get("Authorization");
-    if auth_header.is_none() {
-        return Err(ServiceError::BadRequest(String::from("No auth header.")));
-    }
-    let auth_str = auth_header
-        .unwrap()
-        .to_str()
-        .map_err(|_| ServiceError::BadRequest(String::from("Invalid auth header.")))?;
+    let token = get_token(req.headers().get("Authorization"));
 
-    if !auth_str.starts_with("Bearer ") {
-        return Err(ServiceError::BadRequest("Invalid auth header format.".to_string()));
-    }
-
-    let parts: Vec<&str> = auth_str.split_whitespace().collect();
-    if let Some(token) = parts.get(1) {
-        println!("Access Token: {}", token);
-        let res = db.store_invalidated_token(token);
-        let response = json!({
+    match token {
+        Ok(val) => {
+            println!("Access Token: {}", val);
+            let res = db.store_invalidated_token(val);
+            let response =
+                json!({
                 "message": "User logout successfully!"
             });
-        match res {
-            Ok(_) => Ok(HttpResponse::Ok().json(response)),
-            Err(_) => Err(ServiceError::BadRequest("Error storing invalidated token.".to_string())),
+            match res {
+                Ok(_) => Ok(HttpResponse::Ok().json(response)),
+                Err(_) =>
+                    Err(ServiceError::BadRequest("Error storing invalidated token.".to_string())),
+            }
         }
-    } else {
-        Err(ServiceError::BadRequest("Invalid auth header format.".to_string()))
+        Err(err) => Err(err),
     }
 }
