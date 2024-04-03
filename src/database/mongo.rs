@@ -44,6 +44,6 @@ impl Mongo {
     pub fn store_invalidated_token(&self, access_token: &str) -> Result<String, Error> {
         let filter = doc! { "access_token": access_token };
         let user = self.col.find_one(filter, None).ok().expect("Error Invalidating Token");
-        Ok(String::from("Invalidated token!"))
+        Ok(user)
     }
 }

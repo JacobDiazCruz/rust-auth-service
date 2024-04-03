@@ -108,7 +108,7 @@ pub async fn logout_user(
             let res = db.store_invalidated_token(val);
             let response =
                 json!({
-                "message": "User logout successfully!"
+                "message": "User logged out successfully!"
             });
             match res {
                 Ok(_) => Ok(HttpResponse::Ok().json(response)),
