@@ -1,9 +1,9 @@
 use actix_web::{ HttpServer, App, web };
-use api::user::get_user_by_id;
+use api::user::{ get_user_by_id, login_google_user, create_user, logout_user };
 use crate::api::check_version::check_version;
-use crate::api::user::{ create_user, logout_user };
-use crate::{ database::mongo::Mongo };
+use crate::database::mongo::Mongo;
 use dotenv::dotenv;
+use actix_cors::Cors;
 
 pub mod api;
 pub mod database;
@@ -17,6 +17,10 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     HttpServer::new(move || {
+        let cors = Cors::default() // Allow all origins by default
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST"]);
+
         App::new()
             .app_data(
                 web::Data::new({
@@ -24,8 +28,10 @@ async fn main() -> std::io::Result<()> {
                     db
                 })
             )
+            .wrap(cors)
             .route("/user", web::post().to(create_user))
             .route("/user/{id}", web::get().to(get_user_by_id))
+            .route("/login/google", web::post().to(login_google_user))
             .route("/logout", web::post().to(logout_user))
             .route("/check-version", web::get().to(check_version))
     })

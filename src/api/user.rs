@@ -45,14 +45,16 @@ pub async fn login_google_user(
 ) -> Result<HttpResponse, ServiceError> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email))?;
+    let email_str = email.get_email().clone();
+
     let id_token = form.id_token.clone();
     let payload = check_payload(id_token).await?;
 
     if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
-        return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
+        return Err(ServiceError::BadRequest(String::from("Invalid ID token")));
     }
 
-    let user = db.get_user_by_email(form.email.clone());
+    let user = db.get_user_by_email(email_str);
 
     match user {
         Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),

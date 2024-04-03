@@ -23,6 +23,10 @@ impl Email {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn get_email(&self) -> &String {
+        &self.0
+    }
 }
 
 impl User {
