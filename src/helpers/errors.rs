@@ -30,7 +30,7 @@ impl ErrorMessages {
             ErrorMessages::UserNotExist => "User does not exist.".to_string(),
             ErrorMessages::UserFetchError => "Error fetching user.".to_string(),
             ErrorMessages::CreateUserError => "Failed creating user.".to_string(),
-            ErrorMessages::CreateUserError => "Failed invalidating token.".to_string(),
+            ErrorMessages::InvalidateTokenError => "Failed invalidating token.".to_string(),
         }
     }
 }
