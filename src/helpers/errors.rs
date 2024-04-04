@@ -14,6 +14,27 @@ pub enum ServiceError {
     JWKSFetchError,
 }
 
+#[derive(Debug, Display)]
+pub enum ErrorMessages {
+    InvalidToken,
+    UserNotExist,
+    UserFetchError,
+    CreateUserError,
+    InvalidateTokenError,
+}
+
+impl ErrorMessages {
+    pub fn error_msg(&self) -> String {
+        match self {
+            ErrorMessages::InvalidToken => "Invalid token.".to_string(),
+            ErrorMessages::UserNotExist => "User does not exist.".to_string(),
+            ErrorMessages::UserFetchError => "Error fetching user.".to_string(),
+            ErrorMessages::CreateUserError => "Failed creating user.".to_string(),
+            ErrorMessages::CreateUserError => "Failed invalidating token.".to_string(),
+        }
+    }
+}
+
 fn init_error(message: &str, status_code: i32) -> Value {
     let error_obj = json!({
         "message": message,

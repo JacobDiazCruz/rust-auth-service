@@ -1,9 +1,9 @@
-use actix_web::{ web, Result, Error, HttpResponse, HttpRequest };
+use actix_web::{ web, Result, HttpResponse, HttpRequest };
 use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
     models::user_model::{ User, Email },
-    helpers::errors::ServiceError,
+    helpers::errors::{ ServiceError, ErrorMessages },
     helpers::form_data::{ FormData, LoginForm },
     helpers::obj_id_converter::Converter,
     helpers::jwt::{ sign_jwt, get_token },
@@ -15,14 +15,14 @@ use google_oauth::{ AsyncClient, GooglePayload };
 pub async fn create_user(
     db: web::Data<Mongo>,
     form: web::Json<FormData>
-) -> Result<web::Json<InsertOneResult>, Error> {
+) -> Result<web::Json<InsertOneResult>, ServiceError> {
     let email = Email::parse(String::from(&form.email))?;
     let name = form.name.clone();
     let user = User::new(name, email);
 
     match db.create_user(user) {
         Ok(insert_result) => Ok(web::Json(insert_result)),
-        Err(_) => Err(ServiceError::BadRequest(String::from("oh no")).into()),
+        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
     }
 }
 
@@ -34,7 +34,7 @@ pub async fn get_user_by_id(
     let user = db.get_user_by_id(obj_id);
     match user {
         Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),
-        Ok(None) => Err(ServiceError::BadRequest("User does not exist.".to_string())),
+        Ok(None) => Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg())),
         Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
     }
 }
@@ -48,10 +48,10 @@ pub async fn login_google_user(
     let email_str = email.get_email().clone();
 
     let id_token = form.id_token.clone();
-    let payload = check_payload(id_token).await?;
+    let payload = check_google_payload(id_token).await?;
 
     if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
-        return Err(ServiceError::BadRequest(String::from("Invalid ID token")));
+        return Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg()));
     }
 
     let user = db.get_user_by_email(email_str);
@@ -72,18 +72,21 @@ pub async fn login_google_user(
                     match user_details {
                         Ok(Some(_)) => Ok(HttpResponse::Ok().json(response)),
                         Ok(None) =>
-                            Err(ServiceError::BadRequest("User does not exist.".to_string())),
-                        Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
+                            Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg())),
+                        Err(_) =>
+                            Err(
+                                ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())
+                            ),
                     }
                 }
-                Err(_) => Err(ServiceError::BadRequest(String::from("oh no")).into()),
+                Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
             }
         }
-        Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
+        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
     }
 }
 
-async fn check_payload(id_token: String) -> Result<GooglePayload, ServiceError> {
+async fn check_google_payload(id_token: String) -> Result<GooglePayload, ServiceError> {
     let client_id: String = env
         ::var("GOOGLE_CLIENT_ID")
         .expect("GOOGLE_CLIENT_ID environment variable not set");
@@ -92,7 +95,7 @@ async fn check_payload(id_token: String) -> Result<GooglePayload, ServiceError> 
     let payload = match payload_result {
         Ok(payload) => payload,
         Err(_) => {
-            return Err(ServiceError::BadRequest(String::from("Invalid ID token")).into());
+            return Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg()));
         }
     };
     return Ok(payload);
@@ -115,7 +118,7 @@ pub async fn logout_user(
             match res {
                 Ok(_) => Ok(HttpResponse::Ok().json(response)),
                 Err(_) =>
-                    Err(ServiceError::BadRequest("Error storing invalidated token.".to_string())),
+                    Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
             }
         }
         Err(err) => Err(err),
