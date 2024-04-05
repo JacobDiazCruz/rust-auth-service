@@ -4,7 +4,7 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::models::user_model::{ User, TokenPayload };
+use crate::models::user_model::{ User };
 
 pub struct Mongo {
     col: Collection<User>,

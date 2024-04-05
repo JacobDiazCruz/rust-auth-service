@@ -1,126 +1,30 @@
 use actix_web::{ web, Result, HttpResponse, HttpRequest };
-use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
-    models::user_model::{ User, Email },
-    helpers::errors::{ ServiceError, ErrorMessages },
-    helpers::form_data::{ FormData, LoginForm },
-    helpers::obj_id_converter::Converter,
-    helpers::jwt::{ sign_jwt, get_token },
+    services::user::{ login_google_user_service, logout_user_service },
+    helpers::errors::{ ServiceError },
+    helpers::form_data::LoginForm,
 };
-use std::env;
-use serde_json::json;
-use google_oauth::{ AsyncClient, GooglePayload };
 
-pub async fn create_user(
-    db: web::Data<Mongo>,
-    form: web::Json<FormData>
-) -> Result<web::Json<InsertOneResult>, ServiceError> {
-    let email = Email::parse(String::from(&form.email))?;
-    let name = form.name.clone();
-    let user = User::new(name, email);
-
-    match db.create_user(user) {
-        Ok(insert_result) => Ok(web::Json(insert_result)),
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
-    }
-}
-
-pub async fn get_user_by_id(
-    db: web::Data<Mongo>,
-    user_id: web::Path<String>
-) -> Result<HttpResponse, ServiceError> {
-    let obj_id = Converter::string_to_bson(user_id.to_string())?;
-    let user = db.get_user_by_id(obj_id);
-    match user {
-        Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),
-        Ok(None) => Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg())),
-        Err(_) => Err(ServiceError::BadRequest("Error fetching user.".to_string())),
-    }
-}
-
-pub async fn login_google_user(
+pub async fn login_google_user_api(
     db: web::Data<Mongo>,
     form: web::Json<LoginForm>
 ) -> Result<HttpResponse, ServiceError> {
-    let name = form.name.clone();
-    let email = Email::parse(String::from(&form.email))?;
-    let email_str = email.get_email().clone();
-
-    let id_token = form.id_token.clone();
-    let payload = check_google_payload(id_token).await?;
-
-    if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
-        return Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg()));
-    }
-
-    let user = db.get_user_by_email(email_str);
-
-    match user {
-        Ok(Some(data)) => Ok(HttpResponse::Ok().json(data)),
-        Ok(None) => {
-            let user = User::new(name, email);
-            match db.create_user(user) {
-                Ok(insert_result) => {
-                    let obj_id = Converter::string_to_bson(insert_result.inserted_id.to_string())?;
-                    let user_details = db.get_user_by_id(obj_id);
-                    let access_token = sign_jwt()?;
-                    let response =
-                        json!({
-                            "access_token": access_token
-                        });
-                    match user_details {
-                        Ok(Some(_)) => Ok(HttpResponse::Ok().json(response)),
-                        Ok(None) =>
-                            Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg())),
-                        Err(_) =>
-                            Err(
-                                ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())
-                            ),
-                    }
-                }
-                Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
-            }
-        }
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
+    let response = login_google_user_service(db, form).await;
+    match response {
+        Ok(data) => Ok(HttpResponse::Ok().json(data)),
+        Err(err) => Err(err),
     }
 }
 
-async fn check_google_payload(id_token: String) -> Result<GooglePayload, ServiceError> {
-    let client_id: String = env
-        ::var("GOOGLE_CLIENT_ID")
-        .expect("GOOGLE_CLIENT_ID environment variable not set");
-    let client = AsyncClient::new(client_id);
-    let payload_result = client.validate_id_token(id_token).await;
-    let payload = match payload_result {
-        Ok(payload) => payload,
-        Err(_) => {
-            return Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg()));
-        }
-    };
-    return Ok(payload);
-}
-
-pub async fn logout_user(
+pub async fn logout_user_api(
     db: web::Data<Mongo>,
     req: HttpRequest
 ) -> Result<HttpResponse, ServiceError> {
-    let token = get_token(req.headers().get("Authorization"));
-
-    match token {
-        Ok(val) => {
-            println!("Access Token: {}", val);
-            let res = db.store_invalidated_token(val);
-            let response =
-                json!({
-                "message": "User logged out successfully!"
-            });
-            match res {
-                Ok(_) => Ok(HttpResponse::Ok().json(response)),
-                Err(_) =>
-                    Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
-            }
-        }
-        Err(err) => Err(err),
+    let auth_header = req.headers().get("Authorization");
+    let response = logout_user_service(db, auth_header).await;
+    match response {
+        Ok(data) => Ok(HttpResponse::Ok().json(data)),
+        Err(err) => Err(ServiceError::BadRequest(err)),
     }
 }
