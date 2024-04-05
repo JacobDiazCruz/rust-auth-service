@@ -4,7 +4,7 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::models::user_model::User;
+use crate::models::user_model::{ User, TokenPayload };
 
 pub struct Mongo {
     col: Collection<User>,
@@ -42,8 +42,10 @@ impl Mongo {
     }
 
     pub fn store_invalidated_token(&self, access_token: &str) -> Result<Option<String>, Error> {
-        let filter = doc! { "access_token": access_token };
-        let data = self.col.find_one(filter, None).ok().expect("Error Invalidating Token");
+        let data = doc! {
+            "access_token": access_token
+        };
+        let data = self.col.insert_one(access_token, None).ok().expect("Error Invalidating Token");
         Ok(data)
     }
 }

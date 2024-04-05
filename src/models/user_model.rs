@@ -8,6 +8,7 @@ pub struct User {
     pub name: String,
     pub email: Email,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Email(String);
 
