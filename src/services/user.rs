@@ -73,43 +73,26 @@ pub async fn login_google_user_service(
     let user = db.get_user_by_email(email_str);
     let access_token = sign_jwt()?;
 
-    match user {
-        Ok(Some(data)) => {
-            let response = LoginResponse {
-                access_token,
-                user: data,
-            };
-            Ok(response)
-        }
-        Ok(None) => {
-            let payload: User = User::new(name, email);
-            let new_user = create_user_service(db.clone(), payload).await;
-            match new_user {
-                Ok(insert_result) => {
-                    let user_details = get_user_by_id_service(
-                        db,
-                        insert_result.inserted_id.to_string()
-                    ).await;
-                    match user_details {
-                        Ok(Some(data)) => {
-                            let response = LoginResponse {
-                                access_token,
-                                user: data,
-                            };
-                            Ok(response)
-                        }
-                        Ok(None) =>
-                            Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg())),
-                        Err(_) =>
-                            Err(
-                                ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())
-                            ),
-                    }
-                }
-                Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
-            }
-        }
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::UserFetchError.error_msg())),
+    if let Some(data) = user.unwrap() {
+        let response = LoginResponse {
+            access_token,
+            user: data,
+        };
+        return Ok(response);
+    }
+
+    let payload: User = User::new(name, email);
+    let new_user = create_user_service(db.clone(), payload).await?;
+    let new_user_details = get_user_by_id_service(db, new_user.inserted_id.to_string()).await?;
+
+    if let Some(data) = new_user_details {
+        let response = LoginResponse {
+            access_token,
+            user: data,
+        };
+        Ok(response)
+    } else {
+        Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg()))
     }
 }
 
