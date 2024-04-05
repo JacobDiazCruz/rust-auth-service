@@ -1,4 +1,4 @@
-use actix_web::{ web, Result, HttpResponse, http::header::HeaderValue };
+use actix_web::{ web, Result, http::header::HeaderValue };
 use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
@@ -122,7 +122,7 @@ pub async fn logout_user_service(
     match token {
         Ok(val) => {
             println!("Access Token: {}", val);
-            let res = db.store_invalidated_token(val);
+            let res = db.store_invalidated_token(val.to_string());
             let response =
                 json!({
                 "message": "User logged out successfully!"

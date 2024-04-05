@@ -4,10 +4,17 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::models::user_model::{ User };
+use crate::models::user_model::User;
+use serde::{ Serialize, Deserialize };
 
 pub struct Mongo {
     col: Collection<User>,
+    invalidated_tokens_col: Collection<InvalidateTokenPayload>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InvalidateTokenPayload {
+    access_token: String,
 }
 
 impl Mongo {
@@ -16,7 +23,9 @@ impl Mongo {
         let client: Client = Client::with_uri_str(uri).unwrap();
         let db = client.database("rustDB");
         let col: Collection<User> = db.collection("User");
-        Mongo { col }
+        let invalidated_tokens_col: Collection<InvalidateTokenPayload> =
+            db.collection("InvalidateTokenPayload");
+        Mongo { col, invalidated_tokens_col }
     }
 
     pub fn create_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
@@ -41,11 +50,14 @@ impl Mongo {
         Ok(user)
     }
 
-    pub fn store_invalidated_token(&self, access_token: &str) -> Result<Option<String>, Error> {
-        let data = doc! {
-            "access_token": access_token
+    pub fn store_invalidated_token(&self, access_token: String) -> Result<InsertOneResult, Error> {
+        let data = InvalidateTokenPayload {
+            access_token,
         };
-        let data = self.col.insert_one(access_token, None).ok().expect("Error Invalidating Token");
-        Ok(data)
+        let result = self.invalidated_tokens_col
+            .insert_one(data, None)
+            .ok()
+            .expect("Error Invalidating Token");
+        Ok(result)
     }
 }
