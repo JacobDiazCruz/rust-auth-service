@@ -13,4 +13,4 @@ This application serves as a template for a micro-service auth app. It implement
 - /helpers: This directory stores reusable chunks of logic.
 
 ### Features:
-1. The app currently only serves Google authentication.
+- The login currently only implements Google authentication.
