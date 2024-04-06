@@ -81,8 +81,8 @@ pub async fn login_google_user_service(
         return Ok(response);
     }
 
-    let payload: User = User::new(name, email);
-    let new_user = create_user_service(db.clone(), payload).await?;
+    let new_user_payload: User = User::new(name, email);
+    let new_user = create_user_service(db.clone(), new_user_payload).await?;
     let new_user_details = get_user_by_id_service(db, new_user.inserted_id.to_string()).await?;
 
     if let Some(data) = new_user_details {

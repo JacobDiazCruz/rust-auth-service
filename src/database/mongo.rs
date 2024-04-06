@@ -8,7 +8,7 @@ use crate::models::user_model::User;
 use serde::{ Serialize, Deserialize };
 
 pub struct Mongo {
-    col: Collection<User>,
+    user_col: Collection<User>,
     invalidated_tokens_col: Collection<InvalidateTokenPayload>,
 }
 
@@ -22,10 +22,10 @@ impl Mongo {
         let uri: String = env::var("MONGO_URI").expect("MONGO_URI environment variable not set");
         let client: Client = Client::with_uri_str(uri).unwrap();
         let db = client.database("rustDB");
-        let col: Collection<User> = db.collection("User");
+        let user_col: Collection<User> = db.collection("users");
         let invalidated_tokens_col: Collection<InvalidateTokenPayload> =
-            db.collection("InvalidateTokenPayload");
-        Mongo { col, invalidated_tokens_col }
+            db.collection("invalidated_tokens");
+        Mongo { user_col, invalidated_tokens_col }
     }
 
     pub fn create_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
@@ -34,19 +34,19 @@ impl Mongo {
             name: new_user.name,
             email: new_user.email,
         };
-        let user = self.col.insert_one(data, None).ok().expect("Error Creating User");
+        let user = self.user_col.insert_one(data, None).ok().expect("Error Creating User");
         Ok(user)
     }
 
     pub fn get_user_by_id(&self, user_id: ObjectId) -> Result<Option<User>, Error> {
         let filter = doc! { "_id": user_id };
-        let user = self.col.find_one(filter, None).ok().expect("Error Getting User");
+        let user = self.user_col.find_one(filter, None).ok().expect("Error Getting User");
         Ok(user)
     }
 
     pub fn get_user_by_email(&self, email: String) -> Result<Option<User>, Error> {
         let filter = doc! { "email": email };
-        let user = self.col.find_one(filter, None).ok().expect("Error Getting User");
+        let user = self.user_col.find_one(filter, None).ok().expect("Error Getting User");
         Ok(user)
     }
 
