@@ -40,6 +40,23 @@ pub async fn get_user_by_id_service(
     }
 }
 
+fn login_response(data: User) -> Result<LoginResponse, ServiceError> {
+    let user_id_str = match data.id {
+        Some(object_id) => object_id.to_hex(),
+        None => {
+            return Err(ServiceError::InternalServerError("User ID not found.".to_string()));
+        }
+    };
+    let access_token = sign_jwt(&user_id_str)?;
+    let refresh_token = sign_jwt(&user_id_str)?;
+    let response = LoginResponse {
+        access_token,
+        refresh_token,
+        user: data,
+    };
+    return Ok(response);
+}
+
 pub async fn login_google_user_service(
     db: web::Data<Mongo>,
     form: web::Json<LoginForm>
@@ -56,16 +73,10 @@ pub async fn login_google_user_service(
     }
 
     let user = db.get_user_by_email(email_str);
-    let access_token = sign_jwt()?;
-    let refresh_token = sign_jwt()?;
 
     if let Some(data) = user.unwrap() {
-        let response = LoginResponse {
-            access_token,
-            refresh_token,
-            user: data,
-        };
-        return Ok(response);
+        let response = login_response(data);
+        return Ok(response.unwrap());
     }
 
     let new_user_payload: User = User::new(name, email);
@@ -73,12 +84,8 @@ pub async fn login_google_user_service(
     let new_user_details = get_user_by_id_service(db, new_user.inserted_id.to_string()).await?;
 
     if let Some(data) = new_user_details {
-        let response = LoginResponse {
-            access_token,
-            refresh_token,
-            user: data,
-        };
-        Ok(response)
+        let response = login_response(data);
+        Ok(response.unwrap())
     } else {
         Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg()))
     }

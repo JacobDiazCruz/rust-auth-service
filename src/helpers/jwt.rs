@@ -6,12 +6,12 @@ use serde::{ Serialize, Deserialize };
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    email: String,
+    access_id: String,
     issued_at: u64,
     exp: u64,
 }
 
-pub fn sign_jwt() -> Result<String, ServiceError> {
+pub fn sign_jwt(access_id: &str) -> Result<String, ServiceError> {
     let mut header = Header::new(Algorithm::HS512);
     header.kid = Some("blabla".to_owned());
 
@@ -24,7 +24,7 @@ pub fn sign_jwt() -> Result<String, ServiceError> {
     let expiration_time = current_time + 3600;
 
     let my_claims = Claims {
-        email: String::from("test@email.com"),
+        access_id: String::from(access_id),
         issued_at: current_time,
         exp: expiration_time,
     };
@@ -33,7 +33,7 @@ pub fn sign_jwt() -> Result<String, ServiceError> {
     Ok(token.unwrap())
 }
 
-pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<&str, ServiceError> {
+pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<String, ServiceError> {
     if auth_header.is_none() {
         return Err(ServiceError::BadRequest(String::from("No auth header.")));
     }
@@ -49,17 +49,17 @@ pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<&str, ServiceError
     let parts: Vec<&str> = auth_str.split_whitespace().collect();
 
     if let Some(token) = parts.get(1) {
-        return Ok(token);
+        return Ok(String::from(token.to_owned()));
     } else {
         Err(ServiceError::InternalServerError("Invalid auth header format.".to_string()))
     }
 }
 
-pub fn validate_jwt(access_token: &str) -> Result<&str, ServiceError> {
+pub fn validate_jwt(access_token: &str) -> Result<String, ServiceError> {
     let decoding_key = DecodingKey::from_secret("secret".as_ref());
     let mut validation = Validation::new(Algorithm::HS512);
 
-    let token_data = match decode::<Claims>(access_token, &decoding_key, &validation) {
+    let token_data = match decode::<Claims>(&access_token, &decoding_key, &validation) {
         Ok(token_data) => token_data,
         Err(_) => {
             return Err(ServiceError::Unauthorized("Invalid access token.".to_string()));
@@ -75,5 +75,5 @@ pub fn validate_jwt(access_token: &str) -> Result<&str, ServiceError> {
         return Err(ServiceError::Unauthorized("Expired access token.".to_string()));
     }
 
-    Ok(access_token)
+    Ok(String::from(token_data.claims.access_id))
 }

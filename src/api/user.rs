@@ -18,25 +18,6 @@ pub async fn login_google_user_api(
     }
 }
 
-pub async fn refresh_token_api(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
-    let auth_header = req.headers().get("Authorization");
-    let refresh_token = get_token(auth_header);
-    let valid_refresh_token = validate_jwt(refresh_token.unwrap());
-    match valid_refresh_token {
-        Ok(_) => {
-            let new_refresh_token = sign_jwt()?;
-            let new_access_token = sign_jwt()?;
-            let data =
-                json!({
-                    "new_refresh_token": new_refresh_token,
-                    "new_access_token": new_access_token
-                });
-            Ok(HttpResponse::Ok().json(data))
-        }
-        Err(err) => Err(err),
-    }
-}
-
 pub async fn logout_user_api(
     db: web::Data<Mongo>,
     req: HttpRequest
@@ -46,5 +27,24 @@ pub async fn logout_user_api(
     match response {
         Ok(data) => Ok(HttpResponse::Ok().json(data)),
         Err(err) => Err(ServiceError::BadRequest(err)),
+    }
+}
+
+pub async fn refresh_token_api(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
+    let auth_header = req.headers().get("Authorization");
+    let refresh_token = get_token(auth_header);
+    let access_id = validate_jwt(&refresh_token.unwrap());
+    match access_id {
+        Ok(data) => {
+            let new_refresh_token = sign_jwt(&data)?;
+            let new_access_token = sign_jwt(&data)?;
+            let data =
+                json!({
+                    "new_refresh_token": new_refresh_token,
+                    "new_access_token": new_access_token
+                });
+            Ok(HttpResponse::Ok().json(data))
+        }
+        Err(err) => Err(err),
     }
 }
