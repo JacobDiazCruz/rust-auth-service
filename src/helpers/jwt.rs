@@ -20,7 +20,8 @@ pub fn sign_jwt() -> Result<String, ServiceError> {
         .expect("Time went backwards")
         .as_secs();
 
-    let expiration_time = current_time + 3600; // Token expires in 1 hour
+    // Token expires in 1 hour
+    let expiration_time = current_time + 3600;
 
     let my_claims = Claims {
         email: String::from("test@email.com"),
