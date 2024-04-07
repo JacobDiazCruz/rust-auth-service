@@ -5,7 +5,7 @@ use crate::{
     helpers::errors::{ ServiceError },
     helpers::{ form_data::LoginForm, jwt::{ sign_jwt, get_token, validate_jwt } },
 };
-use serde_json::{ json, Value };
+use serde_json::json;
 
 pub async fn login_google_user_api(
     db: web::Data<Mongo>,

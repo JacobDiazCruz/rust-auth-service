@@ -15,6 +15,7 @@ use serde::{ Serialize, Deserialize };
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     access_token: String,
+    refresh_token: String,
     user: User,
 }
 
@@ -56,10 +57,12 @@ pub async fn login_google_user_service(
 
     let user = db.get_user_by_email(email_str);
     let access_token = sign_jwt()?;
+    let refresh_token = sign_jwt()?;
 
     if let Some(data) = user.unwrap() {
         let response = LoginResponse {
             access_token,
+            refresh_token,
             user: data,
         };
         return Ok(response);
@@ -72,6 +75,7 @@ pub async fn login_google_user_service(
     if let Some(data) = new_user_details {
         let response = LoginResponse {
             access_token,
+            refresh_token,
             user: data,
         };
         Ok(response)
