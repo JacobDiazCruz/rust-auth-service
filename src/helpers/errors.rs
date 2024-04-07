@@ -5,8 +5,8 @@ use derive_more::Display;
 
 #[derive(Debug, Display)]
 pub enum ServiceError {
-    #[display(fmt = "Internal Server Error")]
-    InternalServerError,
+    #[display(fmt = "Internal Server Error")] InternalServerError(String),
+    #[display(fmt = "Unauthorized")] Unauthorized(String),
 
     #[display(fmt = "BadRequest: {}", _0)] BadRequest(String),
 
@@ -46,8 +46,12 @@ fn init_error(message: &str, status_code: i32) -> Value {
 impl ResponseError for ServiceError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            ServiceError::InternalServerError => {
+            ServiceError::InternalServerError(ref message) => {
                 let error_json = init_error("Internal Server Error. Please try again.", 500);
+                HttpResponse::InternalServerError().json(error_json)
+            }
+            ServiceError::Unauthorized(ref message) => {
+                let error_json = init_error("Unauthorized", 404);
                 HttpResponse::InternalServerError().json(error_json)
             }
             ServiceError::BadRequest(ref message) => {

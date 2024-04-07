@@ -3,8 +3,9 @@ use crate::{
     database::mongo::Mongo,
     services::user::{ login_google_user_service, logout_user_service },
     helpers::errors::{ ServiceError },
-    helpers::form_data::LoginForm,
+    helpers::{ form_data::LoginForm, jwt::{ sign_jwt, get_token, validate_jwt } },
 };
+use serde_json::{ json, Value };
 
 pub async fn login_google_user_api(
     db: web::Data<Mongo>,
@@ -13,6 +14,25 @@ pub async fn login_google_user_api(
     let response = login_google_user_service(db, form).await;
     match response {
         Ok(data) => Ok(HttpResponse::Ok().json(data)),
+        Err(err) => Err(err),
+    }
+}
+
+pub async fn refresh_token_api(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
+    let auth_header = req.headers().get("Authorization");
+    let refresh_token = get_token(auth_header);
+    let valid_refresh_token = validate_jwt(refresh_token.unwrap());
+    match valid_refresh_token {
+        Ok(_) => {
+            let new_refresh_token = sign_jwt()?;
+            let new_access_token = sign_jwt()?;
+            let data =
+                json!({
+                    "new_refresh_token": new_refresh_token,
+                    "new_access_token": new_access_token
+                });
+            Ok(HttpResponse::Ok().json(data))
+        }
         Err(err) => Err(err),
     }
 }

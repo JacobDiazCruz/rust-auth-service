@@ -1,32 +1,35 @@
 use actix_web::http::header::HeaderValue;
-use hmac::{ Hmac, Mac };
-use jwt::{ AlgorithmType, Header, SignWithKey, Token };
-use sha2::Sha384;
-use std::collections::BTreeMap;
-
+use std::time::{ SystemTime };
+use jsonwebtoken::{ encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey };
 use super::errors::ServiceError;
+use serde::{ Serialize, Deserialize };
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    email: String,
+    issued_at: u64,
+    exp: u64,
+}
 
 pub fn sign_jwt() -> Result<String, ServiceError> {
-    let key: Hmac<Sha384> = Hmac::new_from_slice(b"some-secret").map_err(|e|
-        ServiceError::BadRequest(format!("Key initialization error: {:?}", e))
-    )?;
+    let mut header = Header::new(Algorithm::HS512);
+    header.kid = Some("blabla".to_owned());
 
-    let header = Header {
-        algorithm: AlgorithmType::Hs384,
-        ..Default::default()
+    let current_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let expiration_time = current_time + 3600; // Token expires in 1 hour
+
+    let my_claims = Claims {
+        email: String::from("test@email.com"),
+        issued_at: current_time,
+        exp: expiration_time,
     };
 
-    // Create a BTreeMap for JWT claims
-    let mut claims = BTreeMap::new();
-    claims.insert("sub", "someone");
-
-    // Sign the JWT token
-    let token = Token::new(header, claims);
-    let token_str = token
-        .sign_with_key(&key)
-        .map_err(|e| ServiceError::BadRequest(format!("Token signing error: {:?}", e)))?;
-
-    Ok(token_str.into())
+    let token = encode(&header, &my_claims, &EncodingKey::from_secret("secret".as_ref()));
+    Ok(token.unwrap())
 }
 
 pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<&str, ServiceError> {
@@ -47,6 +50,29 @@ pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<&str, ServiceError
     if let Some(token) = parts.get(1) {
         return Ok(token);
     } else {
-        Err(ServiceError::BadRequest("Invalid auth header format.".to_string()))
+        Err(ServiceError::InternalServerError("Invalid auth header format.".to_string()))
     }
+}
+
+pub fn validate_jwt(access_token: &str) -> Result<&str, ServiceError> {
+    let decoding_key = DecodingKey::from_secret("secret".as_ref());
+    let mut validation = Validation::new(Algorithm::HS512);
+
+    let token_data = match decode::<Claims>(access_token, &decoding_key, &validation) {
+        Ok(token_data) => token_data,
+        Err(_) => {
+            return Err(ServiceError::Unauthorized("Invalid access token.".to_string()));
+        }
+    };
+
+    let current_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    if token_data.claims.exp < current_time {
+        return Err(ServiceError::Unauthorized("Expired access token.".to_string()));
+    }
+
+    Ok(access_token)
 }
