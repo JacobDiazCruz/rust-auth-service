@@ -33,6 +33,11 @@ impl Mongo {
             id: None,
             name: new_user.name,
             email: new_user.email,
+            password: if let Some(password) = new_user.password {
+                Some(password)
+            } else {
+                None
+            },
         };
         let user = self.user_col.insert_one(data, None).ok().expect("Error Creating User");
         Ok(user)

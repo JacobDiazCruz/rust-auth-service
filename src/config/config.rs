@@ -7,6 +7,7 @@ pub struct Config {
     pub google_oauth_client_id: String,
     pub google_oauth_client_secret: String,
     pub google_oauth_redirect_url: String,
+    pub client_url: String,
 }
 
 impl Config {
@@ -26,6 +27,7 @@ impl Config {
         let google_oauth_redirect_url = std::env
             ::var("GOOGLE_OAUTH_REDIRECT_URL")
             .expect("GOOGLE_OAUTH_REDIRECT_URL must be set");
+        let client_url = std::env::var("CLIENT_URL").expect("CLIENT_URL must be set");
 
         Config {
             client_origin,
@@ -35,6 +37,7 @@ impl Config {
             google_oauth_client_id,
             google_oauth_client_secret,
             google_oauth_redirect_url,
+            client_url,
         }
     }
 }

@@ -1,5 +1,5 @@
 use actix_web::{ HttpServer, http, App, web };
-use api::user::{ login_google_user_api, logout_user_api, refresh_token_api };
+use api::user::{ login_google_user_api, logout_user_api, refresh_token_api, register_user_api };
 use crate::database::mongo::Mongo;
 use dotenv::dotenv;
 use actix_cors::Cors;
@@ -37,6 +37,7 @@ async fn main() -> std::io::Result<()> {
             )
             .wrap(cors)
             .route("/user/login/google", web::post().to(login_google_user_api))
+            .route("/user/register", web::post().to(register_user_api))
             .route("/logout", web::post().to(logout_user_api))
             .route("/refresh-token", web::get().to(refresh_token_api))
     })

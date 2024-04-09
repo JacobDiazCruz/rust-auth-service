@@ -8,10 +8,14 @@ pub struct User {
     pub id: Option<ObjectId>,
     pub name: String,
     pub email: Email,
+    pub password: Option<Password>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Email(String);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Password(String);
 
 impl Email {
     pub fn parse(email: String) -> Result<Email, ServiceError> {
@@ -31,12 +35,31 @@ impl Email {
     }
 }
 
+impl Password {
+    pub fn parse(password: String) -> Result<Password, ServiceError> {
+        if password.is_empty() {
+            Err(ServiceError::BadRequest("Password is required.".to_string()))
+        } else {
+            Ok(Password(password))
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn get_email(&self) -> &String {
+        &self.0
+    }
+}
+
 impl User {
     pub fn new(name: String, email: Email) -> Self {
         Self {
             id: None,
             name,
             email,
+            password: None,
         }
     }
 }

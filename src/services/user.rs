@@ -2,14 +2,12 @@ use actix_web::{ web, Result, http::header::HeaderValue };
 use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
-    models::user_model::{ User, Email },
-    models::oauth_model::Oauth,
+    models::user_model::{ User, Email, Password },
     helpers::errors::{ ServiceError, ErrorMessages },
     helpers::form_data::LoginForm,
     helpers::obj_id_converter::Converter,
-    helpers::jwt::{ sign_jwt, get_token },
+    helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
-use log::{ error };
 use serde_json::{ json, Value };
 use serde::{ Serialize, Deserialize };
 
@@ -18,6 +16,27 @@ pub struct LoginResponse {
     access_token: String,
     refresh_token: String,
     user: User,
+}
+
+pub async fn register_user_service(
+    db: web::Data<Mongo>,
+    form: web::Json<ManualLoginForm>
+) -> Result<InsertOneResult, ServiceError> {
+    let name = form.name.clone();
+    let email = Email::parse(String::from(&form.email))?;
+    let password = Password::parse(String::from(&form.password))?;
+
+    let user = User {
+        id: None,
+        name,
+        email,
+        password: Some(password),
+    };
+
+    match db.create_user(user) {
+        Ok(insert_result) => Ok(insert_result),
+        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+    }
 }
 
 pub async fn create_user_service(
@@ -66,9 +85,7 @@ pub async fn login_google_user_service(
     let email = Email::parse(String::from(&form.email))?;
     let email_str = email.get_email().clone();
 
-    let id_token = form.id_token.clone();
-
-    // add verify id_token here in the future
+    // Note: Add verify id_token here in the future
 
     let user = db.get_user_by_email(email_str);
 

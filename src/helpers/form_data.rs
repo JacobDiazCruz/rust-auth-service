@@ -12,4 +12,12 @@ pub struct LoginForm {
     pub id_token: String,
     pub name: String,
     pub email: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ManualLoginForm {
+    pub name: String,
+    pub email: String,
+    pub password: String,
 }
