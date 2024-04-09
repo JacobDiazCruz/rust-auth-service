@@ -25,12 +25,13 @@ pub async fn register_user_service(
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email))?;
     let password = Password::parse(String::from(&form.password))?;
+    let hashed_password = Password::hash(&password);
 
     let user = User {
         id: None,
         name,
         email,
-        password: Some(password),
+        password: Some(hashed_password.unwrap()),
     };
 
     match db.create_user(user) {

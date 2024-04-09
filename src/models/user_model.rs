@@ -1,6 +1,7 @@
 use mongodb::bson::oid::ObjectId;
 use serde::{ Serialize, Deserialize };
-use crate::{ helpers::errors::ServiceError };
+use crate::helpers::errors::ServiceError;
+use bcrypt::{ hash_with_result, verify, BcryptError };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
@@ -44,11 +45,16 @@ impl Password {
         }
     }
 
+    pub fn hash(&self) -> Result<Password, BcryptError> {
+        let hashed_password = hash_with_result(&self.0, 12)?;
+        Ok(Password(hashed_password.to_string()))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    pub fn get_email(&self) -> &String {
+    pub fn get_password(&self) -> &String {
         &self.0
     }
 }
