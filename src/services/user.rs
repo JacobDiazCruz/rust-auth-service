@@ -9,6 +9,7 @@ use crate::{
     helpers::obj_id_converter::Converter,
     helpers::jwt::{ sign_jwt, get_token },
 };
+use log::{ error };
 use serde_json::{ json, Value };
 use serde::{ Serialize, Deserialize };
 
@@ -66,11 +67,8 @@ pub async fn login_google_user_service(
     let email_str = email.get_email().clone();
 
     let id_token = form.id_token.clone();
-    let payload = Oauth::validate_google_token(id_token).await?;
 
-    if payload.at_hash.is_none() || payload.azp.is_none() || payload.email.is_none() {
-        return Err(ServiceError::BadRequest(ErrorMessages::InvalidToken.error_msg()));
-    }
+    // add verify id_token here in the future
 
     let user = db.get_user_by_email(email_str);
 
@@ -94,7 +92,7 @@ pub async fn login_google_user_service(
 pub async fn logout_user_service(
     db: web::Data<Mongo>,
     auth_header: Option<&HeaderValue>
-) -> Result<Value, String> {
+) -> Result<Value, ServiceError> {
     let token = get_token(auth_header);
 
     match token {
@@ -107,9 +105,10 @@ pub async fn logout_user_service(
             });
             match res {
                 Ok(_) => Ok(response),
-                Err(_) => Err(ErrorMessages::InvalidateTokenError.error_msg()),
+                Err(_) =>
+                    Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
             }
         }
-        Err(_) => Err(ErrorMessages::InvalidateTokenError.error_msg()),
+        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
     }
 }

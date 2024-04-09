@@ -6,12 +6,12 @@ use serde::{ Serialize, Deserialize };
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    access_id: String,
+    user_id: String,
     issued_at: u64,
     exp: u64,
 }
 
-pub fn sign_jwt(access_id: &str) -> Result<String, ServiceError> {
+pub fn sign_jwt(user_id: &str) -> Result<String, ServiceError> {
     let mut header = Header::new(Algorithm::HS512);
     header.kid = Some("blabla".to_owned());
 
@@ -24,7 +24,7 @@ pub fn sign_jwt(access_id: &str) -> Result<String, ServiceError> {
     let expiration_time = current_time + 3600;
 
     let my_claims = Claims {
-        access_id: String::from(access_id),
+        user_id: String::from(user_id),
         issued_at: current_time,
         exp: expiration_time,
     };
@@ -43,7 +43,7 @@ pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<String, ServiceErr
         .map_err(|_| ServiceError::BadRequest(String::from("Invalid auth header.")))?;
 
     if !auth_str.starts_with("Bearer ") {
-        return Err(ServiceError::BadRequest("Invalid auth header format.".to_string()));
+        return Err(ServiceError::BadRequest(String::from("Invalid auth header format.")));
     }
 
     let parts: Vec<&str> = auth_str.split_whitespace().collect();
@@ -51,7 +51,7 @@ pub fn get_token(auth_header: Option<&HeaderValue>) -> Result<String, ServiceErr
     if let Some(token) = parts.get(1) {
         return Ok(String::from(token.to_owned()));
     } else {
-        Err(ServiceError::InternalServerError("Invalid auth header format.".to_string()))
+        Err(ServiceError::BadRequest(String::from("Error in getting parts of the token.")))
     }
 }
 
@@ -75,5 +75,5 @@ pub fn validate_jwt(access_token: &str) -> Result<String, ServiceError> {
         return Err(ServiceError::Unauthorized("Expired access token.".to_string()));
     }
 
-    Ok(String::from(token_data.claims.access_id))
+    Ok(String::from(token_data.claims.user_id))
 }

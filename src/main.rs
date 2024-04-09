@@ -1,4 +1,4 @@
-use actix_web::{ HttpServer, App, web };
+use actix_web::{ HttpServer, http, App, web };
 use api::user::{ login_google_user_api, logout_user_api, refresh_token_api };
 use crate::database::mongo::Mongo;
 use dotenv::dotenv;
@@ -8,6 +8,7 @@ pub mod api;
 pub mod services;
 pub mod database;
 pub mod models;
+pub mod config;
 pub mod helpers;
 
 #[actix_web::main]
@@ -17,7 +18,15 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     HttpServer::new(move || {
-        let cors = Cors::default().allow_any_origin().allowed_methods(vec!["GET", "POST"]);
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:3000")
+            .allowed_origin_fn(|origin, _req_head| {
+                origin.as_bytes().ends_with(b"localhost:3000")
+            })
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+            .allowed_header(http::header::CONTENT_TYPE)
+            .max_age(3600);
 
         App::new()
             .app_data(
@@ -27,7 +36,7 @@ async fn main() -> std::io::Result<()> {
                 })
             )
             .wrap(cors)
-            .route("/login/google", web::post().to(login_google_user_api))
+            .route("/user/login/google", web::post().to(login_google_user_api))
             .route("/logout", web::post().to(logout_user_api))
             .route("/refresh-token", web::get().to(refresh_token_api))
     })
