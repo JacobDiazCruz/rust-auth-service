@@ -1,7 +1,7 @@
 use mongodb::bson::oid::ObjectId;
 use serde::{ Serialize, Deserialize };
 use crate::helpers::errors::ServiceError;
-use bcrypt::{ hash_with_result, verify, BcryptError };
+use bcrypt::{ hash_with_result, BcryptError };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {

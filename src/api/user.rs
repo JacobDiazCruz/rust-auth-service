@@ -1,7 +1,12 @@
 use actix_web::{ web, Result, HttpResponse, HttpRequest };
 use crate::{
     database::mongo::Mongo,
-    services::user::{ login_google_user_service, logout_user_service, register_user_service },
+    services::user::{
+        login_google_user_service,
+        logout_user_service,
+        register_user_service,
+        manual_login_user_service,
+    },
     helpers::errors::ServiceError,
     helpers::{
         form_data::{ LoginForm, ManualLoginForm },
@@ -15,6 +20,17 @@ pub async fn register_user_api(
     form: web::Json<ManualLoginForm>
 ) -> Result<HttpResponse, ServiceError> {
     let response = register_user_service(db, form).await;
+    match response {
+        Ok(data) => Ok(HttpResponse::Ok().json(data)),
+        Err(err) => Err(err),
+    }
+}
+
+pub async fn manual_login_user_api(
+    db: web::Data<Mongo>,
+    form: web::Json<ManualLoginForm>
+) -> Result<HttpResponse, ServiceError> {
+    let response = manual_login_user_service(db, form).await;
     match response {
         Ok(data) => Ok(HttpResponse::Ok().json(data)),
         Err(err) => Err(err),

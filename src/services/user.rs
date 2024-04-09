@@ -10,6 +10,7 @@ use crate::{
 };
 use serde_json::{ json, Value };
 use serde::{ Serialize, Deserialize };
+use bcrypt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
@@ -84,6 +85,38 @@ fn login_response(data: User) -> Result<LoginResponse, ServiceError> {
         user: data,
     };
     return Ok(response);
+}
+
+pub async fn manual_login_user_service(
+    db: web::Data<Mongo>,
+    form: web::Json<ManualLoginForm>
+) -> Result<User, ServiceError> {
+    let email = Email::parse(String::from(&form.email))?;
+    let email_str = email.get_email().clone();
+    let password = Password::parse(String::from(&form.password))?;
+
+    let user = db.get_user_by_email(email_str);
+    match user {
+        Ok(data) => {
+            let user_data = data.unwrap();
+            let user_password = user_data.password
+                .as_ref()
+                .ok_or_else(||
+                    ServiceError::InternalServerError("User password not found.".to_string())
+                )?;
+
+            let is_pw_verified = bcrypt::verify(
+                password.get_password(),
+                &user_password.get_password()
+            );
+            if is_pw_verified.unwrap() {
+                Ok(user_data)
+            } else {
+                Err(ServiceError::BadRequest("Wrong password. Please try again.".to_string()))
+            }
+        }
+        Err(_) => Err(ServiceError::InternalServerError("User ID not found.".to_string())),
+    }
 }
 
 pub async fn login_google_user_service(
