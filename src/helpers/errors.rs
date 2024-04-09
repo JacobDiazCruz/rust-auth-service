@@ -18,6 +18,7 @@ pub enum ServiceError {
 pub enum ErrorMessages {
     InvalidToken,
     UserNotExist,
+    EmailAlreadyExist,
     UserFetchError,
     CreateUserError,
     InvalidateTokenError,
@@ -28,6 +29,7 @@ impl ErrorMessages {
         match self {
             ErrorMessages::InvalidToken => "Invalid token.".to_string(),
             ErrorMessages::UserNotExist => "User does not exist.".to_string(),
+            ErrorMessages::EmailAlreadyExist => "Email already exist.".to_string(),
             ErrorMessages::UserFetchError => "Error fetching user.".to_string(),
             ErrorMessages::CreateUserError => "Failed creating user.".to_string(),
             ErrorMessages::InvalidateTokenError => "Failed invalidating token.".to_string(),

@@ -26,17 +26,25 @@ pub async fn register_user_service(
     let email = Email::parse(String::from(&form.email))?;
     let password = Password::parse(String::from(&form.password))?;
     let hashed_password = Password::hash(&password);
+    let email_str = email.get_email().clone();
 
-    let user = User {
+    let new_user = User {
         id: None,
         name,
         email,
         password: Some(hashed_password.unwrap()),
     };
 
-    match db.create_user(user) {
-        Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+    // check if email exists
+    let email_exist = db.get_user_by_email(email_str);
+
+    if let Some(_) = email_exist.unwrap() {
+        return Err(ServiceError::BadRequest(ErrorMessages::EmailAlreadyExist.error_msg()));
+    } else {
+        match db.create_user(new_user) {
+            Ok(insert_result) => Ok(insert_result),
+            Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+        }
     }
 }
 
