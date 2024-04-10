@@ -2,6 +2,7 @@ use mongodb::bson::oid::ObjectId;
 use serde::{ Serialize, Deserialize };
 use crate::helpers::errors::ServiceError;
 use bcrypt::{ hash_with_result, BcryptError };
+use regex::Regex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
@@ -21,10 +22,13 @@ pub struct Password(String);
 impl Email {
     pub fn parse(email: String) -> Result<Email, ServiceError> {
         if email.is_empty() {
-            Err(ServiceError::BadRequest("Email is required.".to_string()))
-        } else {
-            Ok(Email(email))
+            return Err(ServiceError::BadRequest("Email is required.".to_string()));
         }
+        let email_regex = Regex::new(r"^[\w-]+(\.[\w-]+)*@([\w-]+\.)+[a-zA-Z]{2,7}$").unwrap();
+        if !email_regex.is_match(&email) {
+            return Err(ServiceError::BadRequest("Invalid email format.".to_string()));
+        }
+        Ok(Email(email))
     }
 
     pub fn is_empty(&self) -> bool {
