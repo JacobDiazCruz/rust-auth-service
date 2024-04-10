@@ -2,10 +2,13 @@
 This application serves as a template for a micro-service auth app. It implements Actix as its primary web framework and MongoDB for storing data.
 
 ### Features:
-- Google oauth
-- Facebook oauth (WIP)
+- Manual login
+- Google oauth2
 - JWT (Access and Refresh tokens)
 - Model validations
+- Custom service errors
+- MongoDB & Actix
+  
 ### Directories:
 - /api: This directory contains all the main entry point functions of the API endpoints.
 
