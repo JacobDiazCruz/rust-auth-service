@@ -34,6 +34,7 @@ pub async fn register_user_service(
         name,
         email,
         password: Some(hashed_password.unwrap()),
+        is_verified: Some(false),
     };
 
     // check if email exists
@@ -109,11 +110,17 @@ pub async fn manual_login_user_service(
                 password.get_password(),
                 &user_password.get_password()
             );
-            if is_pw_verified.unwrap() {
-                Ok(user_data)
-            } else {
-                Err(ServiceError::BadRequest("Wrong password. Please try again.".to_string()))
+            if !is_pw_verified.unwrap() {
+                return Err(
+                    ServiceError::BadRequest("Wrong password. Please try again.".to_string())
+                );
             }
+            if !user_data.is_verified.unwrap() {
+                return Err(
+                    ServiceError::BadRequest("Please verify your account first.".to_string())
+                );
+            }
+            Ok(user_data)
         }
         Err(_) => Err(ServiceError::InternalServerError("User ID not found.".to_string())),
     }

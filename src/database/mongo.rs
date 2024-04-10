@@ -38,6 +38,7 @@ impl Mongo {
             } else {
                 None
             },
+            is_verified: new_user.is_verified,
         };
         let user = self.user_col.insert_one(data, None).ok().expect("Error Creating User");
         Ok(user)

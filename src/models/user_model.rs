@@ -11,6 +11,7 @@ pub struct User {
     pub name: String,
     pub email: Email,
     pub password: Option<Password>,
+    pub is_verified: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +71,7 @@ impl User {
             name,
             email,
             password: None,
+            is_verified: Some(false),
         }
     }
 }
