@@ -76,7 +76,7 @@ impl Mongo {
         data: UserVerificationCode
     ) -> Result<Option<UserVerificationCode>, Error> {
         let filter = doc! { "email": data.email.get_email(), "code": data.code };
-        let verif_code_data = self.verification_codes_col
+        let verif_code_data: Option<UserVerificationCode> = self.verification_codes_col
             .find_one(filter, None)
             .ok()
             .expect("Error Getting Verfication Code Data.");

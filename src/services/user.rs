@@ -4,7 +4,7 @@ use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
-    helpers::obj_id_converter::Converter,
+    helpers::{ obj_id_converter::Converter, form_data::VerificationCodeForm },
     helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
 use crate::helpers::errors::ServiceError;
@@ -93,8 +93,20 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
     }
 }
 
-pub fn account_verification_service(code: String) {
-    // user will send the code here then match it to the code in the db, then update the is_verified data if it matches.
+// User is already logged in, but needs to verify the account first.
+pub async fn account_verification_service(
+    db: web::Data<Mongo>,
+    form: web::Json<VerificationCodeForm>
+) -> Result<String, ServiceError> {
+    let payload = UserVerificationCode {
+        email: Email::parse(form.email.clone()).unwrap(),
+        code: form.code.clone(),
+    };
+
+    match db.get_verification_code(payload) {
+        Ok(res) => { Ok("Account verified!!".to_string()) }
+        Err(_) => Err(BadRequest("Wrong code.".to_string())),
+    }
 }
 
 pub async fn get_user_by_id_service(

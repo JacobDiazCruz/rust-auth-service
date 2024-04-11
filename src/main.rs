@@ -5,6 +5,7 @@ use api::user::{
     refresh_token_api,
     register_user_api,
     manual_login_user_api,
+    account_verification_api,
 };
 use crate::database::mongo::Mongo;
 use dotenv::dotenv;
@@ -44,6 +45,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .route("/user/login/google", web::post().to(login_google_user_api))
             .route("/user/login", web::post().to(manual_login_user_api))
+            .route("/user/verify", web::post().to(account_verification_api))
             .route("/user/register", web::post().to(register_user_api))
             .route("/logout", web::post().to(logout_user_api))
             .route("/refresh-token", web::get().to(refresh_token_api))

@@ -21,3 +21,8 @@ pub struct ManualLoginForm {
     pub email: String,
     pub password: String,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationCodeForm {
+    pub email: String,
+    pub code: String,
+}

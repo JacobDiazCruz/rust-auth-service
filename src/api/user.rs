@@ -6,10 +6,11 @@ use crate::{
         logout_user_service,
         register_user_service,
         manual_login_user_service,
+        account_verification_service,
     },
     helpers::errors::ServiceError,
     helpers::{
-        form_data::{ LoginForm, ManualLoginForm },
+        form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm },
         jwt::{ sign_jwt, get_token, validate_jwt },
     },
 };
@@ -20,6 +21,17 @@ pub async fn register_user_api(
     form: web::Json<ManualLoginForm>
 ) -> Result<HttpResponse, ServiceError> {
     let response = register_user_service(db, form).await;
+    match response {
+        Ok(data) => Ok(HttpResponse::Ok().json(data)),
+        Err(err) => Err(err),
+    }
+}
+
+pub async fn account_verification_api(
+    db: web::Data<Mongo>,
+    form: web::Json<VerificationCodeForm>
+) -> Result<HttpResponse, ServiceError> {
+    let response = account_verification_service(db, form).await;
     match response {
         Ok(data) => Ok(HttpResponse::Ok().json(data)),
         Err(err) => Err(err),
