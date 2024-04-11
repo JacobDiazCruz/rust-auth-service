@@ -93,7 +93,6 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
     }
 }
 
-// User is already logged in, but needs to verify the account first.
 pub async fn account_verification_service(
     db: web::Data<Mongo>,
     form: web::Json<VerificationCodeForm>
@@ -104,7 +103,7 @@ pub async fn account_verification_service(
     };
 
     match db.get_verification_code(payload) {
-        Ok(res) => { Ok("Account verified!!".to_string()) }
+        Ok(res) => { Ok("Account verified!".to_string()) }
         Err(_) => Err(BadRequest("Wrong code.".to_string())),
     }
 }
@@ -160,8 +159,15 @@ pub async fn manual_login_user_service(
             if !is_pw_verified.unwrap() {
                 return Err(BadRequest("Wrong password. Please try again.".to_string()));
             }
-            if !user_data.is_verified.unwrap() {
-                return Err(BadRequest("Please verify your account first.".to_string()));
+
+            // If user is not verified yet, send a code to their email.
+            if !user_data.is_verified.unwrap_or_default() {
+                let _ = smtp_service(db, email)?;
+                return Err(
+                    ServiceError::Forbidden(
+                        "We've sent a code to your email. Please verify your account.".to_string()
+                    )
+                );
             }
             Ok(user_data)
         }
