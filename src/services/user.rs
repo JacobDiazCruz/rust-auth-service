@@ -14,7 +14,8 @@ use bcrypt;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{ Message, SmtpTransport, Transport };
-
+use rand::distributions::Alphanumeric;
+use rand::{ thread_rng, Rng };
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     access_token: String,
@@ -38,14 +39,16 @@ pub async fn register_user_service(
     } else {
         let password = Password::parse(String::from(&form.password))?;
         let hashed_password = Password::hash(&password);
+        let cloned_email = email.clone();
         let new_user = User {
             id: None,
             name,
             email,
-            login_type: LoginTypes::Manual,
+            login_type: LoginTypes::MANUAL,
             password: Some(hashed_password.unwrap()),
             is_verified: Some(false),
         };
+        smtp_service(cloned_email);
         match db.create_user(new_user) {
             Ok(_) => Ok("User created successfully!".to_string()),
             Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
@@ -53,14 +56,16 @@ pub async fn register_user_service(
     }
 }
 
-pub async fn send_code_service(receiver: Email) {
+pub fn smtp_service(receiver: Email) {
+    let code: String = thread_rng().sample_iter(&Alphanumeric).take(4).map(char::from).collect();
+
     let email = Message::builder()
         .from("NoBody <your@domain.tld>".parse().unwrap())
         .reply_to("Yuin <my@email.tld>".parse().unwrap())
         .to(receiver.get_email().parse().unwrap())
-        .subject("Happy new year")
+        .subject("Your code")
         .header(ContentType::TEXT_PLAIN)
-        .body(String::from("Be happy!"))
+        .body(format!("Your verification code is: {}", code))
         .unwrap();
 
     let creds = Credentials::new("smtp_username".to_owned(), "smtp_password".to_owned());
@@ -152,7 +157,7 @@ pub async fn login_google_user_service(
         return Ok(response.unwrap());
     }
 
-    let new_user_payload: User = User::new(name, email, Some(true), LoginTypes::Google);
+    let new_user_payload: User = User::new(name, email, Some(true), LoginTypes::GOOGLE);
     let new_user = db.create_user(new_user_payload);
     let new_user_details = get_user_by_id_service(
         db,
