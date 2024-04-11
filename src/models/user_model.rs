@@ -14,6 +14,11 @@ pub struct User {
     pub is_verified: Option<bool>,
     pub login_type: LoginTypes,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserVerificationCode {
+    pub email: Email,
+    pub code: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LoginTypes {

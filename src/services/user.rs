@@ -1,7 +1,7 @@
 use actix_web::{ web, Result, http::header::HeaderValue };
 use crate::{
     database::mongo::Mongo,
-    models::user_model::{ User, Email, Password, LoginTypes },
+    models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
     helpers::obj_id_converter::Converter,
@@ -48,7 +48,7 @@ pub async fn register_user_service(
             password: Some(hashed_password.unwrap()),
             is_verified: Some(false),
         };
-        smtp_service(cloned_email);
+        smtp_service(db.clone(), cloned_email);
         match db.create_user(new_user) {
             Ok(_) => Ok("User created successfully!".to_string()),
             Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
@@ -56,28 +56,45 @@ pub async fn register_user_service(
     }
 }
 
-pub fn smtp_service(receiver: Email) {
+pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, ServiceError> {
     let code: String = thread_rng().sample_iter(&Alphanumeric).take(4).map(char::from).collect();
 
-    let email = Message::builder()
-        .from("NoBody <your@domain.tld>".parse().unwrap())
-        .reply_to("Yuin <my@email.tld>".parse().unwrap())
-        .to(receiver.get_email().parse().unwrap())
-        .subject("Your code")
-        .header(ContentType::TEXT_PLAIN)
-        .body(format!("Your verification code is: {}", code))
-        .unwrap();
+    // store the code to the "codes" collection with the "email" of its owner.
+    let verif_code_payload = UserVerificationCode {
+        code: code.clone(),
+        email: receiver.clone(),
+    };
+    let verif_code_res = db.store_verification_code(verif_code_payload);
 
-    let creds = Credentials::new("smtp_username".to_owned(), "smtp_password".to_owned());
+    match verif_code_res {
+        Ok(_) => {
+            let email = Message::builder()
+                .from("NoBody <your@domain.tld>".parse().unwrap())
+                .reply_to("Yuin <my@email.tld>".parse().unwrap())
+                .to(receiver.get_email().parse().unwrap())
+                .subject("Your code")
+                .header(ContentType::TEXT_PLAIN)
+                .body(format!("Your verification code is: {}", code))
+                .unwrap();
 
-    // Open a remote connection to gmail
-    let mailer = SmtpTransport::relay("smtp.gmail.com").unwrap().credentials(creds).build();
+            let creds = Credentials::new("smtp_username".to_owned(), "smtp_password".to_owned());
 
-    // Send the email
-    match mailer.send(&email) {
-        Ok(_) => println!("Email sent successfully!"),
-        Err(e) => panic!("Could not send email: {e:?}"),
+            // Open a remote connection to gmail
+            let mailer = SmtpTransport::relay("smtp.gmail.com").unwrap().credentials(creds).build();
+
+            // Send the email
+            match mailer.send(&email) {
+                Ok(_) => Ok("Email sent successfully!".to_string()),
+                Err(_) =>
+                    Err(BadRequest("Failed sending email. Please try again later.".to_string())),
+            }
+        }
+        Err(_) => Err(BadRequest("Failed storing verification code.".to_string())),
     }
+}
+
+pub fn account_verification_service(code: String) {
+    // user will send the code here then match it to the code in the db, then update the is_verified data if it matches.
 }
 
 pub async fn get_user_by_id_service(

@@ -4,11 +4,12 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::models::user_model::User;
+use crate::models::user_model::{ User, UserVerificationCode };
 use serde::{ Serialize, Deserialize };
 
 pub struct Mongo {
     user_col: Collection<User>,
+    verification_codes_col: Collection<UserVerificationCode>,
     invalidated_tokens_col: Collection<InvalidateTokenPayload>,
 }
 
@@ -23,9 +24,11 @@ impl Mongo {
         let client: Client = Client::with_uri_str(uri).unwrap();
         let db = client.database("rustDB");
         let user_col: Collection<User> = db.collection("users");
+        let verification_codes_col: Collection<UserVerificationCode> =
+            db.collection("verification_codes");
         let invalidated_tokens_col: Collection<InvalidateTokenPayload> =
             db.collection("invalidated_tokens");
-        Mongo { user_col, invalidated_tokens_col }
+        Mongo { user_col, invalidated_tokens_col, verification_codes_col }
     }
 
     pub fn create_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
@@ -54,6 +57,17 @@ impl Mongo {
     pub fn get_user_by_email(&self, email: String) -> Result<Option<User>, Error> {
         let filter = doc! { "email": email };
         let user = self.user_col.find_one(filter, None).ok().expect("Error Getting User");
+        Ok(user)
+    }
+
+    pub fn store_verification_code(
+        &self,
+        data: UserVerificationCode
+    ) -> Result<InsertOneResult, Error> {
+        let user = self.verification_codes_col
+            .insert_one(data, None)
+            .ok()
+            .expect("Error Creating User");
         Ok(user)
     }
 
