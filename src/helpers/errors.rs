@@ -7,11 +7,7 @@ use derive_more::Display;
 pub enum ServiceError {
     #[display(fmt = "Internal Server Error")] InternalServerError(String),
     #[display(fmt = "Unauthorized")] Unauthorized(String),
-
     #[display(fmt = "BadRequest: {}", _0)] BadRequest(String),
-
-    #[display(fmt = "JWKSFetchError")]
-    JWKSFetchError,
 }
 
 #[derive(Debug, Display)]
@@ -59,10 +55,6 @@ impl ResponseError for ServiceError {
             ServiceError::BadRequest(ref message) => {
                 let error_json = init_error(message, 400);
                 HttpResponse::BadRequest().json(error_json)
-            }
-            ServiceError::JWKSFetchError => {
-                let error_json = init_error("Could not fetch JWKS", 500);
-                HttpResponse::InternalServerError().json(error_json)
             }
         }
     }

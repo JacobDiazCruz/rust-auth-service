@@ -44,10 +44,26 @@ impl Email {
 impl Password {
     pub fn parse(password: String) -> Result<Password, ServiceError> {
         if password.is_empty() {
-            Err(ServiceError::BadRequest("Password is required.".to_string()))
-        } else {
-            Ok(Password(password))
+            return Err(ServiceError::BadRequest("Password is required.".to_string()));
         }
+        if password.len() < 6 {
+            return Err(
+                ServiceError::BadRequest("Password must be at least 6 characters long.".to_string())
+            );
+        }
+        if !password.chars().any(|c| c.is_digit(10)) {
+            return Err(
+                ServiceError::BadRequest("Password must contain at least one number.".to_string())
+            );
+        }
+        if !password.chars().any(|c| c.is_ascii_punctuation()) {
+            return Err(
+                ServiceError::BadRequest(
+                    "Password must contain at least one special character.".to_string()
+                )
+            );
+        }
+        Ok(Password(password))
     }
 
     pub fn hash(&self) -> Result<Password, BcryptError> {
@@ -65,13 +81,13 @@ impl Password {
 }
 
 impl User {
-    pub fn new(name: String, email: Email) -> Self {
+    pub fn new(name: String, email: Email, is_verified: Option<bool>) -> Self {
         Self {
             id: None,
             name,
             email,
             password: None,
-            is_verified: Some(false),
+            is_verified,
         }
     }
 }

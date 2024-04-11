@@ -3,11 +3,12 @@ use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
     models::user_model::{ User, Email, Password },
-    helpers::errors::{ ServiceError, ErrorMessages },
+    helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
     helpers::obj_id_converter::Converter,
     helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
+use crate::helpers::errors::ServiceError;
 use serde_json::{ json, Value };
 use serde::{ Serialize, Deserialize };
 use bcrypt;
@@ -22,30 +23,29 @@ pub struct LoginResponse {
 pub async fn register_user_service(
     db: web::Data<Mongo>,
     form: web::Json<ManualLoginForm>
-) -> Result<InsertOneResult, ServiceError> {
+) -> Result<String, ServiceError> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email))?;
-    let password = Password::parse(String::from(&form.password))?;
-    let hashed_password = Password::hash(&password);
     let email_str = email.get_email().clone();
-
-    let new_user = User {
-        id: None,
-        name,
-        email,
-        password: Some(hashed_password.unwrap()),
-        is_verified: Some(false),
-    };
 
     // check if email exists
     let email_exist = db.get_user_by_email(email_str);
 
     if let Some(_) = email_exist.unwrap() {
-        return Err(ServiceError::BadRequest(ErrorMessages::EmailAlreadyExist.error_msg()));
+        return Err(BadRequest(ErrorMessages::EmailAlreadyExist.error_msg()));
     } else {
+        let password = Password::parse(String::from(&form.password))?;
+        let hashed_password = Password::hash(&password);
+        let new_user = User {
+            id: None,
+            name,
+            email,
+            password: Some(hashed_password.unwrap()),
+            is_verified: Some(false),
+        };
         match db.create_user(new_user) {
-            Ok(insert_result) => Ok(insert_result),
-            Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+            Ok(_) => Ok("User created successfully!".to_string()),
+            Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
         }
     }
 }
@@ -56,7 +56,7 @@ pub async fn create_user_service(
 ) -> Result<InsertOneResult, ServiceError> {
     match db.create_user(user) {
         Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+        Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
     }
 }
 
@@ -67,7 +67,7 @@ pub async fn get_user_by_id_service(
     let obj_id = Converter::string_to_bson(user_id)?;
     match db.get_user_by_id(obj_id) {
         Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::CreateUserError.error_msg())),
+        Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
     }
 }
 
@@ -102,27 +102,21 @@ pub async fn manual_login_user_service(
             let user_data = data.unwrap();
             let user_password = user_data.password
                 .as_ref()
-                .ok_or_else(||
-                    ServiceError::InternalServerError("User password not found.".to_string())
-                )?;
+                .ok_or_else(|| InternalServerError("User password not found.".to_string()))?;
 
             let is_pw_verified = bcrypt::verify(
                 password.get_password(),
                 &user_password.get_password()
             );
             if !is_pw_verified.unwrap() {
-                return Err(
-                    ServiceError::BadRequest("Wrong password. Please try again.".to_string())
-                );
+                return Err(BadRequest("Wrong password. Please try again.".to_string()));
             }
             if !user_data.is_verified.unwrap() {
-                return Err(
-                    ServiceError::BadRequest("Please verify your account first.".to_string())
-                );
+                return Err(BadRequest("Please verify your account first.".to_string()));
             }
             Ok(user_data)
         }
-        Err(_) => Err(ServiceError::InternalServerError("User ID not found.".to_string())),
+        Err(_) => Err(InternalServerError("User ID not found.".to_string())),
     }
 }
 
@@ -143,7 +137,7 @@ pub async fn login_google_user_service(
         return Ok(response.unwrap());
     }
 
-    let new_user_payload: User = User::new(name, email);
+    let new_user_payload: User = User::new(name, email, Some(true));
     let new_user = create_user_service(db.clone(), new_user_payload).await?;
     let new_user_details = get_user_by_id_service(db, new_user.inserted_id.to_string()).await?;
 
@@ -151,7 +145,7 @@ pub async fn login_google_user_service(
         let response = login_response(data);
         Ok(response.unwrap())
     } else {
-        Err(ServiceError::BadRequest(ErrorMessages::UserNotExist.error_msg()))
+        Err(BadRequest(ErrorMessages::UserNotExist.error_msg()))
     }
 }
 
@@ -171,10 +165,9 @@ pub async fn logout_user_service(
             });
             match res {
                 Ok(_) => Ok(response),
-                Err(_) =>
-                    Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
+                Err(_) => Err(BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
             }
         }
-        Err(_) => Err(ServiceError::BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
+        Err(_) => Err(BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
     }
 }
