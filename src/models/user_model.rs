@@ -12,6 +12,14 @@ pub struct User {
     pub email: Email,
     pub password: Option<Password>,
     pub is_verified: Option<bool>,
+    pub login_type: LoginTypes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LoginTypes {
+    GOOGLE,
+    FACEBOOK,
+    MANUAL,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,13 +89,19 @@ impl Password {
 }
 
 impl User {
-    pub fn new(name: String, email: Email, is_verified: Option<bool>) -> Self {
+    pub fn new(
+        name: String,
+        email: Email,
+        is_verified: Option<bool>,
+        login_type: LoginTypes
+    ) -> Self {
         Self {
             id: None,
             name,
             email,
             password: None,
             is_verified,
+            login_type,
         }
     }
 }

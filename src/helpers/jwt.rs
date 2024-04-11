@@ -12,8 +12,7 @@ struct Claims {
 }
 
 pub fn sign_jwt(user_id: &str) -> Result<String, ServiceError> {
-    let mut header = Header::new(Algorithm::HS512);
-    header.kid = Some("blabla".to_owned());
+    let header = Header::new(Algorithm::HS512);
 
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

@@ -1,8 +1,7 @@
 use actix_web::{ web, Result, http::header::HeaderValue };
-use mongodb::results::InsertOneResult;
 use crate::{
     database::mongo::Mongo,
-    models::user_model::{ User, Email, Password },
+    models::user_model::{ User, Email, Password, LoginTypes },
     helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
     helpers::obj_id_converter::Converter,
@@ -12,6 +11,9 @@ use crate::helpers::errors::ServiceError;
 use serde_json::{ json, Value };
 use serde::{ Serialize, Deserialize };
 use bcrypt;
+use lettre::message::header::ContentType;
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{ Message, SmtpTransport, Transport };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
@@ -40,6 +42,7 @@ pub async fn register_user_service(
             id: None,
             name,
             email,
+            login_type: LoginTypes::Manual,
             password: Some(hashed_password.unwrap()),
             is_verified: Some(false),
         };
@@ -50,13 +53,25 @@ pub async fn register_user_service(
     }
 }
 
-pub async fn create_user_service(
-    db: web::Data<Mongo>,
-    user: User
-) -> Result<InsertOneResult, ServiceError> {
-    match db.create_user(user) {
-        Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
+pub async fn send_code_service(receiver: Email) {
+    let email = Message::builder()
+        .from("NoBody <your@domain.tld>".parse().unwrap())
+        .reply_to("Yuin <my@email.tld>".parse().unwrap())
+        .to(receiver.get_email().parse().unwrap())
+        .subject("Happy new year")
+        .header(ContentType::TEXT_PLAIN)
+        .body(String::from("Be happy!"))
+        .unwrap();
+
+    let creds = Credentials::new("smtp_username".to_owned(), "smtp_password".to_owned());
+
+    // Open a remote connection to gmail
+    let mailer = SmtpTransport::relay("smtp.gmail.com").unwrap().credentials(creds).build();
+
+    // Send the email
+    match mailer.send(&email) {
+        Ok(_) => println!("Email sent successfully!"),
+        Err(e) => panic!("Could not send email: {e:?}"),
     }
 }
 
@@ -137,9 +152,12 @@ pub async fn login_google_user_service(
         return Ok(response.unwrap());
     }
 
-    let new_user_payload: User = User::new(name, email, Some(true));
-    let new_user = create_user_service(db.clone(), new_user_payload).await?;
-    let new_user_details = get_user_by_id_service(db, new_user.inserted_id.to_string()).await?;
+    let new_user_payload: User = User::new(name, email, Some(true), LoginTypes::Google);
+    let new_user = db.create_user(new_user_payload);
+    let new_user_details = get_user_by_id_service(
+        db,
+        new_user.unwrap().inserted_id.to_string()
+    ).await?;
 
     if let Some(data) = new_user_details {
         let response = login_response(data);
