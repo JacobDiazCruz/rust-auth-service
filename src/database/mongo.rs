@@ -67,8 +67,20 @@ impl Mongo {
         let user = self.verification_codes_col
             .insert_one(data, None)
             .ok()
-            .expect("Error Creating User");
+            .expect("Error in Storing Verification Code Data.");
         Ok(user)
+    }
+
+    pub fn get_verification_code(
+        &self,
+        data: UserVerificationCode
+    ) -> Result<Option<UserVerificationCode>, Error> {
+        let filter = doc! { "email": data.email.get_email(), "code": data.code };
+        let verif_code_data = self.verification_codes_col
+            .find_one(filter, None)
+            .ok()
+            .expect("Error Getting Verfication Code Data.");
+        Ok(verif_code_data)
     }
 
     pub fn store_invalidated_token(&self, access_token: String) -> Result<InsertOneResult, Error> {
