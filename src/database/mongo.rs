@@ -1,6 +1,6 @@
 use mongodb::{
     bson::{ extjson::de::Error, doc, oid::ObjectId },
-    results::InsertOneResult,
+    results::{ InsertOneResult, UpdateResult },
     sync::{ Client, Collection },
 };
 use std::env;
@@ -71,6 +71,17 @@ impl Mongo {
         Ok(user)
     }
 
+    pub fn delete_verification_codes(&self, email: &str) -> Result<String, Error> {
+        let filter = doc! {
+            "email": email
+        };
+        let _ = self.verification_codes_col
+            .delete_many(filter, None)
+            .ok()
+            .expect("Error in Storing Verification Code Data.");
+        Ok("Verification code deleted successfully!".to_string())
+    }
+
     pub fn get_verification_code(
         &self,
         data: UserVerificationCode
@@ -81,6 +92,18 @@ impl Mongo {
             .ok()
             .expect("Error Getting Verfication Code Data.");
         Ok(verif_code_data)
+    }
+
+    pub fn update_user_verification(&self, email: &str) -> Result<UpdateResult, Error> {
+        let filter = doc! { "email": email };
+        let update = doc! { "$set": { "is_verified": true } };
+
+        let res = self.user_col
+            .update_one(filter, update, None)
+            .ok()
+            .expect("Error Updating User.");
+
+        Ok(res)
     }
 
     pub fn store_invalidated_token(&self, access_token: String) -> Result<InsertOneResult, Error> {

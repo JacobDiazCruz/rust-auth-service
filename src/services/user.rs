@@ -56,7 +56,7 @@ pub async fn register_user_service(
             password: Some(hashed_password.unwrap()),
             is_verified: Some(false),
         };
-        smtp_service(db.clone(), cloned_email);
+        let _ = smtp_service(db.clone(), cloned_email);
         match db.create_user(new_user) {
             Ok(_) => Ok("User created successfully!".to_string()),
             Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
@@ -112,14 +112,26 @@ pub async fn account_verification_service(
     db: web::Data<Mongo>,
     form: web::Json<VerificationCodeForm>
 ) -> Result<String, ServiceError> {
+    let email = Email::parse(form.email.clone()).unwrap();
     let payload = UserVerificationCode {
-        email: Email::parse(form.email.clone()).unwrap(),
+        email,
         code: form.code.clone(),
     };
 
     // Update is_verified data of the user if it matches
     match db.get_verification_code(payload) {
-        Ok(res) => { Ok("Account verified!".to_string()) }
+        Ok(res) => {
+            let email = res.unwrap().email.get_email().to_string();
+            let update_user_res = db.update_user_verification(&email);
+            match update_user_res {
+                Ok(_) => {
+                    // remove the verification codes in the verif codes collection after
+                    let _ = db.delete_verification_codes(&email);
+                    Ok("Account verified!".to_string())
+                }
+                Err(err) => Err(BadRequest(err.to_string())),
+            }
+        }
         Err(_) => Err(BadRequest("Wrong code.".to_string())),
     }
 }
