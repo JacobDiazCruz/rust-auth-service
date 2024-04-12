@@ -10,7 +10,7 @@ use crate::{
     },
     helpers::errors::ServiceError,
     helpers::{
-        form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm },
+        form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm, RegisterForm },
         jwt::{ sign_jwt, get_token, validate_jwt },
     },
 };
@@ -18,7 +18,7 @@ use serde_json::json;
 
 pub async fn register_user_api(
     db: web::Data<Mongo>,
-    form: web::Json<ManualLoginForm>
+    form: web::Json<RegisterForm>
 ) -> Result<HttpResponse, ServiceError> {
     let response = register_user_service(db, form).await;
     match response {

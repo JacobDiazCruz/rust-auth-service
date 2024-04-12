@@ -17,6 +17,11 @@ pub struct LoginForm {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ManualLoginForm {
+    pub email: String,
+    pub password: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegisterForm {
     pub name: String,
     pub email: String,
     pub password: String,

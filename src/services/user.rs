@@ -1,10 +1,12 @@
+use std::env;
+
 use actix_web::{ web, Result, http::header::HeaderValue };
 use crate::{
     database::mongo::Mongo,
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
-    helpers::{ obj_id_converter::Converter, form_data::VerificationCodeForm },
+    helpers::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
     helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
 use crate::helpers::errors::ServiceError;
@@ -16,6 +18,8 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{ Message, SmtpTransport, Transport };
 use rand::distributions::Alphanumeric;
 use rand::{ thread_rng, Rng };
+use crate::config::config::Config;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     access_token: String,
@@ -23,9 +27,13 @@ pub struct LoginResponse {
     user: User,
 }
 
+pub struct AppState {
+    pub env: Config,
+}
+
 pub async fn register_user_service(
     db: web::Data<Mongo>,
-    form: web::Json<ManualLoginForm>
+    form: web::Json<RegisterForm>
 ) -> Result<String, ServiceError> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email))?;
@@ -57,6 +65,7 @@ pub async fn register_user_service(
 }
 
 pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, ServiceError> {
+    let conf = Config::init();
     let code: String = thread_rng().sample_iter(&Alphanumeric).take(4).map(char::from).collect();
 
     // store the code to the "codes" collection with the "email" of its owner.
@@ -77,7 +86,12 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
                 .body(format!("Your verification code is: {}", code))
                 .unwrap();
 
-            let creds = Credentials::new("smtp_username".to_owned(), "smtp_password".to_owned());
+            println!("{}", conf.google_smtp_username);
+
+            let creds = Credentials::new(
+                conf.google_smtp_username.into(),
+                conf.google_smtp_password.into()
+            );
 
             // Open a remote connection to gmail
             let mailer = SmtpTransport::relay("smtp.gmail.com").unwrap().credentials(creds).build();
@@ -93,6 +107,7 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
     }
 }
 
+// User is logged in but still need to submit the code to verify their account.
 pub async fn account_verification_service(
     db: web::Data<Mongo>,
     form: web::Json<VerificationCodeForm>
@@ -102,6 +117,7 @@ pub async fn account_verification_service(
         code: form.code.clone(),
     };
 
+    // Update is_verified data of the user if it matches
     match db.get_verification_code(payload) {
         Ok(res) => { Ok("Account verified!".to_string()) }
         Err(_) => Err(BadRequest("Wrong code.".to_string())),
