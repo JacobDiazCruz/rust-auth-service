@@ -121,7 +121,7 @@ pub fn smtp_service(
 pub async fn account_verification_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<VerificationCodeForm>
-) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(form.email.clone()).unwrap();
     let payload = UserVerificationCode {
         email,
@@ -129,20 +129,29 @@ pub async fn account_verification_service(
     };
 
     // Update is_verified data of the user if it matches
-    match app_state.db.get_verification_code(payload) {
-        Ok(res) => {
-            let email = res.unwrap().email.get_email().to_string();
+    let res: std::result::Result<
+        Option<UserVerificationCode>,
+        String
+    > = app_state.db.get_verification_code(payload);
+
+    match res {
+        Ok(Some(res)) => {
+            println!("This is res {:#?}", res);
+            let email = res.email.get_email().to_string();
+            println!("my email: {}", email);
             let update_user_res = app_state.db.update_user_verification(&email);
             match update_user_res {
                 Ok(_) => {
                     // remove the verification codes in the verif codes collection after
                     let _ = app_state.db.delete_verification_codes(&email);
-                    Ok("Account verified!".to_string())
+                    Ok((StatusCode::OK, Json(json_response("Account verified!"))))
                 }
                 Err(_) =>
                     Err((StatusCode::BAD_REQUEST, Json(json_response("Error updating user")))),
             }
         }
+        Ok(None) =>
+            Err((StatusCode::BAD_REQUEST, Json(json_response("Wrong code. Please try again.")))),
         Err(_) =>
             Err((StatusCode::BAD_REQUEST, Json(json_response("Error geting verification code.")))),
     }

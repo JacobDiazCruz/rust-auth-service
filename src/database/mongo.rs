@@ -90,7 +90,7 @@ impl Mongo {
         let filter = doc! { "email": data.email.get_email(), "code": data.code };
         match self.verification_codes_col.find_one(filter, None) {
             Ok(verif_code_data) => Ok(verif_code_data),
-            Err(err) => {
+            Err(_) => {
                 println!("Error. code did not match!");
                 Err("".to_string())
             }
