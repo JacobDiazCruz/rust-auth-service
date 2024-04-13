@@ -5,7 +5,6 @@ use axum::extract::Json;
 use axum::{ http::StatusCode, response::IntoResponse, extract::State };
 
 use crate::AppState;
-use crate::helpers::response::LoginResponse;
 use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::form_data::LoginForm,
@@ -25,6 +24,7 @@ use crate::config::config::Config;
 pub fn json_response(message: &str) -> Value {
     let error_obj = json!({
         "message": message,
+        "data": {}
     });
     error_obj
 }
@@ -168,7 +168,7 @@ pub async fn get_user_by_id_service(
     }
 }
 
-fn login_response(data: User) -> Result<LoginResponse, (StatusCode, Json<serde_json::Value>)> {
+fn login_response(data: User) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
     let user_id_str = match data.id {
         Some(object_id) => object_id.to_hex(),
         None => {
@@ -180,18 +180,21 @@ fn login_response(data: User) -> Result<LoginResponse, (StatusCode, Json<serde_j
     };
     let access_token = sign_jwt(&user_id_str).unwrap();
     let refresh_token = sign_jwt(&user_id_str).unwrap();
-    let response = LoginResponse {
-        access_token,
-        refresh_token,
-        user: data,
-    };
+    let response =
+        json!({
+            "message": "User logged in successfully!",
+            "data": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+            }
+    });
     return Ok(response);
 }
 
 pub async fn manual_login_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<ManualLoginForm>
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let email = Email::parse(String::from(&form.email))?;
     let email_str = email.get_email().clone();
     let password = Password::parse(String::from(&form.password))?;
@@ -212,20 +215,21 @@ pub async fn manual_login_user_service(
                 &user_password.unwrap().get_password()
             );
             if !is_pw_verified.unwrap() {
-                return Ok((StatusCode::BAD_REQUEST, Json(json_response("Wrong password!"))));
+                return Err((StatusCode::BAD_REQUEST, Json(json_response("Wrong password!"))));
             }
 
             // If user is not verified yet, send a code to their email.
             if !user_data.is_verified.unwrap_or_default() {
                 let _ = smtp_service(State(app_state), email);
-                return Ok((
+                return Err((
                     StatusCode::FORBIDDEN,
                     Json(
                         json_response("Verify your account first. We've sent a code to your email.")
                     ),
                 ));
             }
-            Ok((StatusCode::CREATED, Json(serde_json::json!({ "user": user_data }))))
+            let response = login_response(user_data).unwrap();
+            Ok((StatusCode::OK, Json(response)))
         }
         Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Handle this mongo error.")))),
     }
@@ -234,7 +238,7 @@ pub async fn manual_login_user_service(
 pub async fn login_google_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<LoginForm>
-) -> Result<(StatusCode, Json<LoginResponse>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email)).unwrap();
     let email_str = email.get_email().clone();

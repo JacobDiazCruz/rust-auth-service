@@ -1,11 +1,6 @@
 use std::sync::Arc;
-use axum::{
-    extract::Json,
-    http::{ StatusCode, HeaderMap },
-    response::IntoResponse,
-    response::Json as AxumJson,
-};
-use serde_json::json;
+use axum::{ extract::Json, http::{ StatusCode, HeaderMap }, response::IntoResponse };
+use serde_json::{ json, Value };
 
 use crate::{
     services::user::{
@@ -38,10 +33,10 @@ pub async fn register_user_api(
 pub async fn account_verification_api(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<VerificationCodeForm>
-) -> impl IntoResponse {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let response = account_verification_service(State(app_state), Json(form)).await;
     match response {
-        Ok(data) => Ok(AxumJson(data)),
+        Ok(data) => Ok(data),
         Err(err) => Err(err),
     }
 }
@@ -49,7 +44,7 @@ pub async fn account_verification_api(
 pub async fn manual_login_user_api(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<ManualLoginForm>
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let response = manual_login_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -60,7 +55,7 @@ pub async fn manual_login_user_api(
 pub async fn login_google_user_api(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<LoginForm>
-) -> Result<(StatusCode, Json<LoginResponse>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let response = login_google_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -71,7 +66,7 @@ pub async fn login_google_user_api(
 pub async fn logout_user_api(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let auth_header = headers.get("Authorization").unwrap();
     let response = logout_user_service(State(app_state), &auth_header).await;
     match response {
@@ -82,7 +77,7 @@ pub async fn logout_user_api(
 
 pub async fn refresh_token_api(
     headers: HeaderMap
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let auth_header = headers.get("Authorization").unwrap();
     let refresh_token = get_token(auth_header);
     let user_id = validate_jwt(&refresh_token.unwrap());
