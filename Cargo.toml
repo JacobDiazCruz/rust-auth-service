@@ -28,8 +28,11 @@ validator = { version="0.17.0", features = ["derive"] }
 reqwest = { version = "0.12.3", features = ["blocking", "json"] }
 lettre = "0.11.6"
 rand = "0.8.5"
+axum = "0.7.5"
+tokio = { version = "1.27.0", features = ["full"] }
+tower-http = { version = "0.5.0", features = ["cors"] }
 
 [dependencies.mongodb]
-version = "2.2.0"
+version = "2.5.0"
 default-features = false
-features = ["sync"]
+features = ["sync", "bson-chrono-0_4"]

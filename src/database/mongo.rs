@@ -4,7 +4,7 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::models::user_model::{ User, UserVerificationCode };
+use crate::{ models::user_model::{ User, UserVerificationCode } };
 use serde::{ Serialize, Deserialize };
 
 pub struct Mongo {
@@ -21,6 +21,7 @@ pub struct InvalidateTokenPayload {
 impl Mongo {
     pub fn init() -> Self {
         let uri: String = env::var("MONGO_URI").expect("MONGO_URI environment variable not set");
+
         let client: Client = Client::with_uri_str(uri).unwrap();
         let db = client.database("rustDB");
         let user_col: Collection<User> = db.collection("users");
@@ -31,18 +32,18 @@ impl Mongo {
         Mongo { user_col, invalidated_tokens_col, verification_codes_col }
     }
 
-    pub fn create_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
+    pub fn create_user(&self, new_user: &User) -> Result<InsertOneResult, Error> {
         let data = User {
             id: None,
-            name: new_user.name,
-            email: new_user.email,
-            password: if let Some(password) = new_user.password {
+            name: new_user.name.clone(),
+            email: new_user.email.clone(),
+            password: if let Some(password) = new_user.password.clone() {
                 Some(password)
             } else {
                 None
             },
-            is_verified: new_user.is_verified,
-            login_type: new_user.login_type,
+            is_verified: new_user.is_verified.clone(),
+            login_type: new_user.login_type.clone(),
         };
         let user = self.user_col.insert_one(data, None).ok().expect("Error Creating User");
         Ok(user)
@@ -85,13 +86,15 @@ impl Mongo {
     pub fn get_verification_code(
         &self,
         data: UserVerificationCode
-    ) -> Result<Option<UserVerificationCode>, Error> {
+    ) -> Result<Option<UserVerificationCode>, String> {
         let filter = doc! { "email": data.email.get_email(), "code": data.code };
-        let verif_code_data: Option<UserVerificationCode> = self.verification_codes_col
-            .find_one(filter, None)
-            .ok()
-            .expect("Error Getting Verfication Code Data.");
-        Ok(verif_code_data)
+        match self.verification_codes_col.find_one(filter, None) {
+            Ok(verif_code_data) => Ok(verif_code_data),
+            Err(err) => {
+                println!("Error. code did not match!");
+                Err("".to_string())
+            }
+        }
     }
 
     pub fn update_user_verification(&self, email: &str) -> Result<UpdateResult, Error> {

@@ -1,8 +1,10 @@
 use mongodb::bson::oid::ObjectId;
 use serde::{ Serialize, Deserialize };
-use crate::helpers::errors::ServiceError;
 use bcrypt::{ hash_with_result, BcryptError };
 use regex::Regex;
+use axum::{ http::StatusCode };
+use crate::services::user::json_response;
+use axum::{ extract::Json };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
@@ -14,6 +16,7 @@ pub struct User {
     pub is_verified: Option<bool>,
     pub login_type: LoginTypes,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserVerificationCode {
     pub email: Email,
@@ -34,13 +37,13 @@ pub struct Email(String);
 pub struct Password(String);
 
 impl Email {
-    pub fn parse(email: String) -> Result<Email, ServiceError> {
+    pub fn parse(email: String) -> Result<Email, (StatusCode, Json<serde_json::Value>)> {
         if email.is_empty() {
-            return Err(ServiceError::BadRequest("Email is required.".to_string()));
+            return Err((StatusCode::BAD_REQUEST, Json(json_response("Email is required."))));
         }
         let email_regex = Regex::new(r"^[\w-]+(\.[\w-]+)*@([\w-]+\.)+[a-zA-Z]{2,7}$").unwrap();
         if !email_regex.is_match(&email) {
-            return Err(ServiceError::BadRequest("Invalid email format.".to_string()));
+            return Err((StatusCode::BAD_REQUEST, Json(json_response("Invalid email format."))));
         }
         Ok(Email(email))
     }
@@ -55,26 +58,27 @@ impl Email {
 }
 
 impl Password {
-    pub fn parse(password: String) -> Result<Password, ServiceError> {
+    pub fn parse(password: String) -> Result<Password, (StatusCode, Json<serde_json::Value>)> {
         if password.is_empty() {
-            return Err(ServiceError::BadRequest("Password is required.".to_string()));
+            return Err((StatusCode::BAD_REQUEST, Json(json_response("Password is required."))));
         }
         if password.len() < 6 {
-            return Err(
-                ServiceError::BadRequest("Password must be at least 6 characters long.".to_string())
-            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json_response("Password must be at least 6 characters long.")),
+            ));
         }
         if !password.chars().any(|c| c.is_digit(10)) {
-            return Err(
-                ServiceError::BadRequest("Password must contain at least one number.".to_string())
-            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json_response("Password must contain at least one number.")),
+            ));
         }
         if !password.chars().any(|c| c.is_ascii_punctuation()) {
-            return Err(
-                ServiceError::BadRequest(
-                    "Password must contain at least one special character.".to_string()
-                )
-            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json_response("Password must contain at least one special character.")),
+            ));
         }
         Ok(Password(password))
     }

@@ -1,17 +1,18 @@
-use std::env;
+use std::sync::Arc;
+use axum::http::HeaderValue;
+use axum::response::Result;
+use axum::extract::Json;
+use axum::{ http::StatusCode, response::IntoResponse, extract::State };
+use crate::AppState;
 
-use actix_web::{ web, Result, http::header::HeaderValue };
+use crate::helpers::response::LoginResponse;
 use crate::{
-    database::mongo::Mongo,
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
-    helpers::errors::{ ServiceError::{ BadRequest, InternalServerError }, ErrorMessages },
     helpers::form_data::LoginForm,
     helpers::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
     helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
-use crate::helpers::errors::ServiceError;
 use serde_json::{ json, Value };
-use serde::{ Serialize, Deserialize };
 use bcrypt;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
@@ -20,30 +21,26 @@ use rand::distributions::Alphanumeric;
 use rand::{ thread_rng, Rng };
 use crate::config::config::Config;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LoginResponse {
-    access_token: String,
-    refresh_token: String,
-    user: User,
-}
-
-pub struct AppState {
-    pub env: Config,
+pub fn json_response(message: &str) -> Value {
+    let error_obj = json!({
+        "message": message,
+    });
+    error_obj
 }
 
 pub async fn register_user_service(
-    db: web::Data<Mongo>,
-    form: web::Json<RegisterForm>
-) -> Result<String, ServiceError> {
+    State(app_state): State<Arc<AppState>>,
+    Json(form): Json<RegisterForm>
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email))?;
     let email_str = email.get_email().clone();
 
     // check if email exists
-    let email_exist = db.get_user_by_email(email_str);
+    let email_exist = app_state.db.get_user_by_email(email_str);
 
     if let Some(_) = email_exist.unwrap() {
-        return Err(BadRequest(ErrorMessages::EmailAlreadyExist.error_msg()));
+        Err((StatusCode::BAD_REQUEST, Json(json_response("Email already exist."))))
     } else {
         let password = Password::parse(String::from(&form.password))?;
         let hashed_password = Password::hash(&password);
@@ -56,15 +53,20 @@ pub async fn register_user_service(
             password: Some(hashed_password.unwrap()),
             is_verified: Some(false),
         };
-        let _ = smtp_service(db.clone(), cloned_email);
-        match db.create_user(new_user) {
-            Ok(_) => Ok("User created successfully!".to_string()),
-            Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
+        let _ = smtp_service(State(app_state.clone()), cloned_email);
+        match app_state.db.create_user(&new_user) {
+            Ok(_) => Ok((StatusCode::CREATED, Json(new_user))),
+            Err(_) => {
+                Err((StatusCode::BAD_REQUEST, Json(json_response("Failed creating user"))))
+            }
         }
     }
 }
 
-pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, ServiceError> {
+pub fn smtp_service(
+    State(app_state): State<Arc<AppState>>,
+    receiver: Email
+) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
     let conf = Config::init();
     let code: String = thread_rng().sample_iter(&Alphanumeric).take(4).map(char::from).collect();
 
@@ -73,7 +75,7 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
         code: code.clone(),
         email: receiver.clone(),
     };
-    let verif_code_res = db.store_verification_code(verif_code_payload);
+    let verif_code_res = app_state.db.store_verification_code(verif_code_payload);
 
     match verif_code_res {
         Ok(_) => {
@@ -100,18 +102,25 @@ pub fn smtp_service(db: web::Data<Mongo>, receiver: Email) -> Result<String, Ser
             match mailer.send(&email) {
                 Ok(_) => Ok("Email sent successfully!".to_string()),
                 Err(_) =>
-                    Err(BadRequest("Failed sending email. Please try again later.".to_string())),
+                    Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(json_response("Failed sending email. Please try again later.")),
+                    )),
             }
         }
-        Err(_) => Err(BadRequest("Failed storing verification code.".to_string())),
+        Err(_) =>
+            Err((
+                StatusCode::BAD_REQUEST,
+                Json(json_response("Failed storing verification code.")),
+            )),
     }
 }
 
 // User is logged in but still need to submit the code to verify their account.
 pub async fn account_verification_service(
-    db: web::Data<Mongo>,
-    form: web::Json<VerificationCodeForm>
-) -> Result<String, ServiceError> {
+    State(app_state): State<Arc<AppState>>,
+    Json(form): Json<VerificationCodeForm>
+) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(form.email.clone()).unwrap();
     let payload = UserVerificationCode {
         email,
@@ -119,43 +128,48 @@ pub async fn account_verification_service(
     };
 
     // Update is_verified data of the user if it matches
-    match db.get_verification_code(payload) {
+    match app_state.db.get_verification_code(payload) {
         Ok(res) => {
             let email = res.unwrap().email.get_email().to_string();
-            let update_user_res = db.update_user_verification(&email);
+            let update_user_res = app_state.db.update_user_verification(&email);
             match update_user_res {
                 Ok(_) => {
                     // remove the verification codes in the verif codes collection after
-                    let _ = db.delete_verification_codes(&email);
+                    let _ = app_state.db.delete_verification_codes(&email);
                     Ok("Account verified!".to_string())
                 }
-                Err(err) => Err(BadRequest(err.to_string())),
+                Err(_) =>
+                    Err((StatusCode::BAD_REQUEST, Json(json_response("Error updating user")))),
             }
         }
-        Err(_) => Err(BadRequest("Wrong code.".to_string())),
+        Err(_) =>
+            Err((StatusCode::BAD_REQUEST, Json(json_response("Error geting verification code.")))),
     }
 }
 
 pub async fn get_user_by_id_service(
-    db: web::Data<Mongo>,
+    State(app_state): State<Arc<AppState>>,
     user_id: String
-) -> Result<Option<User>, ServiceError> {
+) -> Result<Option<User>, (StatusCode, Json<serde_json::Value>)> {
     let obj_id = Converter::string_to_bson(user_id)?;
-    match db.get_user_by_id(obj_id) {
+    match app_state.db.get_user_by_id(obj_id) {
         Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err(BadRequest(ErrorMessages::CreateUserError.error_msg())),
+        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Failed creating user.")))),
     }
 }
 
-fn login_response(data: User) -> Result<LoginResponse, ServiceError> {
+fn login_response(data: User) -> Result<LoginResponse, (StatusCode, Json<serde_json::Value>)> {
     let user_id_str = match data.id {
         Some(object_id) => object_id.to_hex(),
         None => {
-            return Err(ServiceError::InternalServerError("User ID not found.".to_string()));
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json_response("User ID not found.")),
+            ));
         }
     };
-    let access_token = sign_jwt(&user_id_str)?;
-    let refresh_token = sign_jwt(&user_id_str)?;
+    let access_token = sign_jwt(&user_id_str).unwrap();
+    let refresh_token = sign_jwt(&user_id_str).unwrap();
     let response = LoginResponse {
         access_token,
         refresh_token,
@@ -165,95 +179,100 @@ fn login_response(data: User) -> Result<LoginResponse, ServiceError> {
 }
 
 pub async fn manual_login_user_service(
-    db: web::Data<Mongo>,
-    form: web::Json<ManualLoginForm>
-) -> Result<User, ServiceError> {
+    State(app_state): State<Arc<AppState>>,
+    Json(form): Json<ManualLoginForm>
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(String::from(&form.email))?;
     let email_str = email.get_email().clone();
     let password = Password::parse(String::from(&form.password))?;
 
-    let user = db.get_user_by_email(email_str);
+    let user = app_state.db.get_user_by_email(email_str);
     match user {
         Ok(data) => {
             let user_data = data.unwrap();
             let user_password = user_data.password
                 .as_ref()
-                .ok_or_else(|| InternalServerError("User password not found.".to_string()))?;
+                .ok_or_else(|| (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Can't get user password".to_string()),
+                ));
 
             let is_pw_verified = bcrypt::verify(
                 password.get_password(),
-                &user_password.get_password()
+                &user_password.unwrap().get_password()
             );
             if !is_pw_verified.unwrap() {
-                return Err(BadRequest("Wrong password. Please try again.".to_string()));
+                return Ok((StatusCode::BAD_REQUEST, Json(json_response("Wrong password!"))));
             }
 
             // If user is not verified yet, send a code to their email.
             if !user_data.is_verified.unwrap_or_default() {
-                let _ = smtp_service(db, email)?;
-                return Err(
-                    ServiceError::Forbidden(
-                        "We've sent a code to your email. Please verify your account.".to_string()
-                    )
-                );
+                let _ = smtp_service(State(app_state), email);
+                return Ok((
+                    StatusCode::FORBIDDEN,
+                    Json(
+                        json_response("Verify your account first. We've sent a code to your email.")
+                    ),
+                ));
             }
-            Ok(user_data)
+            Ok((StatusCode::CREATED, Json(serde_json::json!({ "user": user_data }))))
         }
-        Err(_) => Err(InternalServerError("User ID not found.".to_string())),
+        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Handle this mongo error.")))),
     }
 }
 
 pub async fn login_google_user_service(
-    db: web::Data<Mongo>,
-    form: web::Json<LoginForm>
-) -> Result<LoginResponse, ServiceError> {
+    State(app_state): State<Arc<AppState>>,
+    Json(form): Json<LoginForm>
+) -> Result<(StatusCode, Json<LoginResponse>), (StatusCode, Json<serde_json::Value>)> {
     let name = form.name.clone();
-    let email = Email::parse(String::from(&form.email))?;
+    let email = Email::parse(String::from(&form.email)).unwrap();
     let email_str = email.get_email().clone();
 
     // Note: Add verify id_token here in the future
 
-    let user = db.get_user_by_email(email_str);
+    let user = app_state.db.get_user_by_email(email_str);
 
     if let Some(data) = user.unwrap() {
-        let response = login_response(data);
-        return Ok(response.unwrap());
+        let response = login_response(data).unwrap();
+        return Ok((StatusCode::OK, Json(response)));
     }
 
-    let new_user_payload: User = User::new(name, email, Some(true), LoginTypes::GOOGLE);
-    let new_user = db.create_user(new_user_payload);
+    let new_user_payload = User::new(name, email, Some(true), LoginTypes::GOOGLE);
+    let new_user = app_state.db.create_user(&new_user_payload);
     let new_user_details = get_user_by_id_service(
-        db,
+        State(app_state),
         new_user.unwrap().inserted_id.to_string()
-    ).await?;
+    ).await.unwrap();
 
     if let Some(data) = new_user_details {
-        let response = login_response(data);
-        Ok(response.unwrap())
+        let response = login_response(data).unwrap();
+        Ok((StatusCode::OK, Json(response)))
     } else {
-        Err(BadRequest(ErrorMessages::UserNotExist.error_msg()))
+        Err((StatusCode::BAD_REQUEST, Json(json_response("User does not exist."))))
     }
 }
 
 pub async fn logout_user_service(
-    db: web::Data<Mongo>,
+    State(app_state): State<Arc<AppState>>,
     auth_header: Option<&HeaderValue>
-) -> Result<Value, ServiceError> {
+) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
     let token = get_token(auth_header);
 
     match token {
         Ok(val) => {
             println!("Access Token: {}", val);
-            let res = db.store_invalidated_token(val.to_string());
+            let res = app_state.db.store_invalidated_token(val.to_string());
             let response =
                 json!({
                 "message": "User logged out successfully!"
             });
             match res {
                 Ok(_) => Ok(response),
-                Err(_) => Err(BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
+                Err(_) =>
+                    Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
             }
         }
-        Err(_) => Err(BadRequest(ErrorMessages::InvalidateTokenError.error_msg())),
+        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
     }
 }
