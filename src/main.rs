@@ -4,7 +4,6 @@ use axum::http::{ header::{ ACCEPT, AUTHORIZATION, CONTENT_TYPE }, HeaderValue, 
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use route::create_router;
-// use helpers::error::MyError;
 
 pub mod api;
 pub mod services;
@@ -20,7 +19,6 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
-    // initialize tracing
     dotenv().ok();
 
     let db = Mongo::init();

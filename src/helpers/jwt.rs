@@ -35,13 +35,13 @@ pub fn sign_jwt(user_id: &str) -> Result<String, (StatusCode, Json<serde_json::V
 }
 
 pub fn get_token(
-    auth_header: Option<&HeaderValue>
+    auth_header: &HeaderValue
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
-    if auth_header.is_none() {
+    if auth_header.is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(json_response("No auth header."))));
     }
+
     let auth_str = auth_header
-        .unwrap()
         .to_str()
         .map_err(|_| (StatusCode::BAD_REQUEST, Json(json_response("Invalid auth header format."))))
         .unwrap();

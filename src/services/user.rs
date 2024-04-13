@@ -3,8 +3,8 @@ use axum::http::HeaderValue;
 use axum::response::Result;
 use axum::extract::Json;
 use axum::{ http::StatusCode, response::IntoResponse, extract::State };
-use crate::AppState;
 
+use crate::AppState;
 use crate::helpers::response::LoginResponse;
 use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
@@ -12,6 +12,7 @@ use crate::{
     helpers::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
     helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
 };
+
 use serde_json::{ json, Value };
 use bcrypt;
 use lettre::message::header::ContentType;
@@ -255,20 +256,16 @@ pub async fn login_google_user_service(
 
 pub async fn logout_user_service(
     State(app_state): State<Arc<AppState>>,
-    auth_header: Option<&HeaderValue>
-) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
-    let token = get_token(auth_header);
+    auth_header: &HeaderValue
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let token = get_token(&auth_header);
 
     match token {
         Ok(val) => {
             println!("Access Token: {}", val);
             let res = app_state.db.store_invalidated_token(val.to_string());
-            let response =
-                json!({
-                "message": "User logged out successfully!"
-            });
             match res {
-                Ok(_) => Ok(response),
+                Ok(_) => Ok((StatusCode::OK, Json(json_response("User logged out successfully!")))),
                 Err(_) =>
                     Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
             }
