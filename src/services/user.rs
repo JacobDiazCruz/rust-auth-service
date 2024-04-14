@@ -5,13 +5,14 @@ use axum::extract::Json;
 use axum::{ http::StatusCode, response::IntoResponse, extract::State };
 
 use crate::AppState;
-use crate::helpers::form_data::LogoutForm;
+use crate::models::user_model::UserBuilder;
+use crate::utils::form_data::LogoutForm;
 use crate::models::refresh_token_model::RefreshToken;
 use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
-    helpers::form_data::LoginForm,
-    helpers::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
-    helpers::{ jwt::sign_jwt, form_data::ManualLoginForm },
+    utils::form_data::LoginForm,
+    utils::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
+    utils::{ jwt::sign_jwt, form_data::ManualLoginForm },
 };
 
 use serde_json::{ json, Value };
@@ -34,28 +35,24 @@ pub fn json_response(message: &str) -> Value {
 pub async fn register_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<RegisterForm>
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let name = form.name.clone();
+) -> Result<(StatusCode, Json<User>), (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(String::from(&form.email))?;
-    let email_str = email.get_email().clone();
 
     // check if email exists
-    let email_exist = app_state.db.get_user_by_email(email_str);
+    let email_exist = app_state.db.get_user_by_email(email.get_email().clone());
 
     if let Some(_) = email_exist.unwrap() {
         Err((StatusCode::BAD_REQUEST, Json(json_response("Email already exist."))))
     } else {
+        let name = form.name.clone();
         let password = Password::parse(String::from(&form.password))?;
         let hashed_password = Password::hash(&password);
         let cloned_email = email.clone();
-        let new_user = User {
-            id: None,
-            name,
-            email,
-            login_type: LoginTypes::MANUAL,
-            password: Some(hashed_password.unwrap()),
-            is_verified: Some(false),
-        };
+        let new_user_builder = UserBuilder::new(name, email, LoginTypes::MANUAL)
+            .password(hashed_password.unwrap())
+            .is_verified(false);
+        let new_user = new_user_builder.build();
+
         let _ = smtp_service(State(app_state.clone()), cloned_email);
         match app_state.db.create_user(&new_user) {
             Ok(_) => Ok((StatusCode::CREATED, Json(new_user))),
@@ -267,7 +264,8 @@ pub async fn login_google_user_service(
         return Ok((StatusCode::OK, Json(response)));
     }
 
-    let new_user_payload = User::new(name, email, Some(true), LoginTypes::GOOGLE);
+    let new_user_builder = UserBuilder::new(name, email, LoginTypes::GOOGLE).is_verified(true);
+    let new_user_payload = new_user_builder.build();
     let new_user = app_state.db.create_user(&new_user_payload);
     let new_user_details = get_user_by_id_service(
         State(app_state.clone()),

@@ -10,7 +10,7 @@ pub mod services;
 pub mod database;
 pub mod models;
 pub mod config;
-pub mod helpers;
+pub mod utils;
 mod route;
 
 pub struct AppState {

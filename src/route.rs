@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{ routing::{ get, post }, Router };
+use axum::{ routing::post, Router };
 
 use crate::handlers::user::{
     login_google_user_handler,

@@ -11,7 +11,7 @@ use crate::{
         manual_login_user_service,
         account_verification_service,
     },
-    helpers::{
+    utils::{
         form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm, RegisterForm, LogoutForm },
         jwt::{ sign_jwt, get_token, validate_jwt },
     },

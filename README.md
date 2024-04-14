@@ -10,7 +10,7 @@ This application serves as a template for a micro-service auth app. It implement
 - MongoDB & Axum
   
 ### Directories:
-- /api: This directory contains all the main entry point functions of the API endpoints.
+- /handlers: This directory contains all the main entry point functions of the API endpoints.
 
 - /services: Here lies the application logic. All services are functions that serve as a bridge between the database and the API.
 

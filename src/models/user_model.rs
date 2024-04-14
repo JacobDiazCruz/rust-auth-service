@@ -17,6 +17,16 @@ pub struct User {
     pub login_type: LoginTypes,
 }
 
+#[derive(Debug)]
+pub struct UserBuilder {
+    id: Option<ObjectId>,
+    name: String,
+    email: Email,
+    password: Option<Password>,
+    is_verified: Option<bool>,
+    login_type: LoginTypes,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserVerificationCode {
     pub email: Email,
@@ -35,6 +45,45 @@ pub struct Email(String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Password(String);
+
+impl UserBuilder {
+    pub fn new(name: String, email: Email, login_type: LoginTypes) -> Self {
+        Self {
+            id: None,
+            name,
+            email,
+            password: None,
+            is_verified: None,
+            login_type,
+        }
+    }
+
+    pub fn id(mut self, id: ObjectId) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn password(mut self, password: Password) -> Self {
+        self.password = Some(password);
+        self
+    }
+
+    pub fn is_verified(mut self, is_verified: bool) -> Self {
+        self.is_verified = Some(is_verified);
+        self
+    }
+
+    pub fn build(self) -> User {
+        User {
+            id: self.id,
+            name: self.name,
+            email: self.email,
+            password: self.password,
+            is_verified: self.is_verified,
+            login_type: self.login_type,
+        }
+    }
+}
 
 impl Email {
     pub fn parse(email: String) -> Result<Email, (StatusCode, Json<serde_json::Value>)> {
@@ -94,23 +143,5 @@ impl Password {
 
     pub fn get_password(&self) -> &String {
         &self.0
-    }
-}
-
-impl User {
-    pub fn new(
-        name: String,
-        email: Email,
-        is_verified: Option<bool>,
-        login_type: LoginTypes
-    ) -> Self {
-        Self {
-            id: None,
-            name,
-            email,
-            password: None,
-            is_verified,
-            login_type,
-        }
     }
 }
