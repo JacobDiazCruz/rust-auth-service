@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use axum::{ extract::Json, http::{ StatusCode, HeaderMap }, response::IntoResponse };
 use axum::extract::State;
-use serde_json::{ json, Value };
+use serde_json::json;
 
 use crate::{
     services::user::{
@@ -32,7 +32,7 @@ pub async fn register_user_handler(
 pub async fn account_verification_handler(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<VerificationCodeForm>
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> impl IntoResponse {
     let response = account_verification_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -43,7 +43,7 @@ pub async fn account_verification_handler(
 pub async fn manual_login_user_handler(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<ManualLoginForm>
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> impl IntoResponse {
     let response = manual_login_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -54,7 +54,7 @@ pub async fn manual_login_user_handler(
 pub async fn login_google_user_handler(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<LoginForm>
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> impl IntoResponse {
     let response = login_google_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -68,7 +68,7 @@ pub async fn login_google_user_handler(
 pub async fn logout_user_handler(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<LogoutForm>
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> impl IntoResponse {
     let response = logout_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
@@ -76,9 +76,7 @@ pub async fn logout_user_handler(
     }
 }
 
-pub async fn refresh_token_handler(
-    headers: HeaderMap
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+pub async fn refresh_token_handler(headers: HeaderMap) -> impl IntoResponse {
     let auth_header = headers.get("Authorization").unwrap();
     let refresh_token = get_token(auth_header);
     let user_id = validate_jwt(&refresh_token.unwrap());
