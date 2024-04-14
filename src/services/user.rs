@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::response::{ Result, IntoResponse };
+use axum::response::Result;
 use axum::extract::Json;
 use axum::{ http::StatusCode, extract::State };
 
@@ -35,7 +35,7 @@ pub fn json_response(message: &str) -> Value {
 pub async fn register_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<RegisterForm>
-) -> impl IntoResponse {
+) -> Result<(StatusCode, Json<User>), (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(String::from(&form.email))?;
 
     // check if email exists
@@ -118,7 +118,7 @@ pub fn smtp_service(
 pub async fn account_verification_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<VerificationCodeForm>
-) -> impl IntoResponse {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let email = Email::parse(form.email.clone()).unwrap();
     let payload = UserVerificationCode {
         email,
