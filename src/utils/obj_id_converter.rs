@@ -2,7 +2,7 @@ use axum::{ response::Result, Json };
 use mongodb::bson::oid::ObjectId;
 use reqwest::StatusCode;
 
-use crate::services::user::json_response;
+use crate::services::user::error_response;
 
 pub struct Converter;
 
@@ -11,7 +11,7 @@ impl Converter {
         let obj_id = match ObjectId::parse_str(&id) {
             Ok(obj_id) => obj_id,
             Err(_) => {
-                return Err((StatusCode::BAD_REQUEST, Json(json_response("Invalid ID format."))));
+                return Err(error_response("Invalid ID format.", StatusCode::BAD_REQUEST));
             }
         };
         Ok(obj_id)

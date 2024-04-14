@@ -2,13 +2,13 @@
 This application serves as a template for a micro-service auth app. It implements Axum as its primary web framework and MongoDB for storing data.
 
 ### Features:
-- Manual login
-- Google oauth2
-- JWT (Access and Refresh tokens)
-- Model validations
-- Custom service errors
+- User builder pattern
+- Newtype pattern
+- Oauth2 Access and Refresh tokens
 - MongoDB & Axum
-  
+- Manual login
+- Google login
+
 ### Directories:
 - /handlers: This directory contains all the main entry point functions of the API endpoints.
 
@@ -18,4 +18,4 @@ This application serves as a template for a micro-service auth app. It implement
 
 - /models: The user model is declared here, containing the entire structure of the user, as well as its validations.
 
-- /helpers: This directory stores reusable chunks of logic.
+- /utils: This directory stores reusable chunks of logic.

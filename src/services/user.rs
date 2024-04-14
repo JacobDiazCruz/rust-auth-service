@@ -8,6 +8,7 @@ use crate::AppState;
 use crate::models::user_model::UserBuilder;
 use crate::utils::form_data::LogoutForm;
 use crate::models::refresh_token_model::RefreshToken;
+use crate::models::response_model::ResponseBuilder;
 use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     utils::form_data::LoginForm,
@@ -15,6 +16,7 @@ use crate::{
     utils::{ jwt::sign_jwt, form_data::ManualLoginForm },
 };
 
+use serde::{ Serialize };
 use serde_json::{ json, Value };
 use bcrypt;
 use lettre::message::header::ContentType;
@@ -24,25 +26,29 @@ use rand::distributions::Alphanumeric;
 use rand::{ thread_rng, Rng };
 use crate::config::config::Config;
 
-pub fn json_response(message: &str) -> Value {
-    let error_obj = json!({
-        "message": message,
-        "data": {}
-    });
-    error_obj
+pub fn error_response(message: &str, status_code: StatusCode) -> (StatusCode, Json<Value>) {
+    ResponseBuilder::<Value>::new(status_code, message).build()
+}
+
+pub fn success_response<T: Serialize>(
+    message: &str,
+    status_code: StatusCode,
+    data: T
+) -> (StatusCode, Json<Value>) {
+    ResponseBuilder::new(status_code, message).data(data).build()
 }
 
 pub async fn register_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<RegisterForm>
-) -> Result<(StatusCode, Json<User>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let email = Email::parse(String::from(&form.email))?;
 
     // check if email exists
     let email_exist = app_state.db.get_user_by_email(email.as_str().clone());
 
     if let Some(_) = email_exist.unwrap() {
-        Err((StatusCode::BAD_REQUEST, Json(json_response("Email already exist."))))
+        Err(error_response("Email already exist.", StatusCode::BAD_REQUEST))
     } else {
         let name = form.name.clone();
         let password = Password::parse(String::from(&form.password))?;
@@ -55,10 +61,9 @@ pub async fn register_user_service(
 
         let _ = smtp_service(State(app_state.clone()), cloned_email);
         match app_state.db.create_user(&new_user) {
-            Ok(_) => Ok((StatusCode::CREATED, Json(new_user))),
-            Err(_) => {
-                Err((StatusCode::BAD_REQUEST, Json(json_response("Failed creating user"))))
-            }
+            Ok(_) =>
+                Ok(success_response("User created successfully!", StatusCode::CREATED, new_user)),
+            Err(_) => Err(error_response("Failed creating user", StatusCode::BAD_REQUEST)),
         }
     }
 }
@@ -66,7 +71,7 @@ pub async fn register_user_service(
 pub fn smtp_service(
     State(app_state): State<Arc<AppState>>,
     receiver: Email
-) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let conf = Config::init();
     let code: String = thread_rng().sample_iter(&Alphanumeric).take(4).map(char::from).collect();
 
@@ -98,19 +103,17 @@ pub fn smtp_service(
 
             // Send the email
             match mailer.send(&email) {
-                Ok(_) => Ok("Email sent successfully!".to_string()),
+                Ok(_) => Ok(success_response("Email sent successfully!", StatusCode::OK, {})),
                 Err(_) =>
-                    Err((
-                        StatusCode::BAD_REQUEST,
-                        Json(json_response("Failed sending email. Please try again later.")),
-                    )),
+                    Err(
+                        error_response(
+                            "Failed sending email. Please try again later.",
+                            StatusCode::BAD_REQUEST
+                        )
+                    ),
             }
         }
-        Err(_) =>
-            Err((
-                StatusCode::BAD_REQUEST,
-                Json(json_response("Failed storing verification code.")),
-            )),
+        Err(_) => Err(error_response("Failed storing verification code.", StatusCode::BAD_REQUEST)),
     }
 }
 
@@ -139,16 +142,14 @@ pub async fn account_verification_service(
                 Ok(_) => {
                     // remove the verification codes in the verif codes collection after
                     let _ = app_state.db.delete_verification_codes(&email);
-                    Ok((StatusCode::OK, Json(json_response("Account verified!"))))
+                    Ok(success_response("Account verified!", StatusCode::OK, {}))
                 }
                 Err(_) =>
-                    Err((StatusCode::BAD_REQUEST, Json(json_response("Error updating user")))),
+                    Err(error_response("Error updating user", StatusCode::INTERNAL_SERVER_ERROR)),
             }
         }
-        Ok(None) =>
-            Err((StatusCode::BAD_REQUEST, Json(json_response("Wrong code. Please try again.")))),
-        Err(_) =>
-            Err((StatusCode::BAD_REQUEST, Json(json_response("Error geting verification code.")))),
+        Ok(None) => Err(error_response("Wrong code. Please try again.", StatusCode::BAD_REQUEST)),
+        Err(_) => Err(error_response("Error geting verification code.", StatusCode::BAD_REQUEST)),
     }
 }
 
@@ -159,7 +160,7 @@ pub async fn get_user_by_id_service(
     let obj_id = Converter::string_to_bson(user_id)?;
     match app_state.db.get_user_by_id(obj_id) {
         Ok(insert_result) => Ok(insert_result),
-        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Failed creating user.")))),
+        Err(_) => Err(error_response("Failed creating user.", StatusCode::BAD_REQUEST)),
     }
 }
 
@@ -170,10 +171,7 @@ fn login_response(
     let user_id_str = match data.id {
         Some(object_id) => object_id.to_hex(),
         None => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json_response("User ID not found.")),
-            ));
+            return Err(error_response("User ID not found.", StatusCode::INTERNAL_SERVER_ERROR));
         }
     };
 
@@ -227,23 +225,24 @@ pub async fn manual_login_user_service(
                 &user_password.unwrap().as_str()
             );
             if !is_pw_verified.unwrap() {
-                return Err((StatusCode::BAD_REQUEST, Json(json_response("Wrong password!"))));
+                return Err(error_response("Wrong password!", StatusCode::BAD_REQUEST));
             }
 
             // If user is not verified yet, send a code to their email.
             if !user_data.is_verified.unwrap_or_default() {
                 let _ = smtp_service(State(app_state), email);
-                return Err((
-                    StatusCode::FORBIDDEN,
-                    Json(
-                        json_response("Verify your account first. We've sent a code to your email.")
-                    ),
-                ));
+                return Err(
+                    error_response(
+                        "Verify your account first. We've sent a code to your email.",
+                        StatusCode::FORBIDDEN
+                    )
+                );
             }
             let response = login_response(State(app_state), user_data).unwrap();
             Ok((StatusCode::OK, Json(response)))
         }
-        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Handle this mongo error.")))),
+        Err(_) =>
+            Err(error_response("Handle this mongo error.", StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
 
@@ -277,7 +276,7 @@ pub async fn login_google_user_service(
         let response = login_response(State(app_state.clone()), data).unwrap();
         Ok((StatusCode::OK, Json(response)))
     } else {
-        Err((StatusCode::BAD_REQUEST, Json(json_response("User does not exist."))))
+        Err(error_response("User does not exist.", StatusCode::BAD_REQUEST))
     }
 }
 
@@ -287,7 +286,8 @@ pub async fn logout_user_service(
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let res = app_state.db.delete_refresh_token(form.refresh_token);
     match res {
-        Ok(_) => Ok((StatusCode::OK, Json(json_response("User logged out successfully!")))),
-        Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
+        Ok(_) => Ok(success_response("User logged out successfully!", StatusCode::OK, {})),
+        Err(_) =>
+            Err(error_response("Error Invalidating Token", StatusCode::INTERNAL_SERVER_ERROR)),
     }
 }
