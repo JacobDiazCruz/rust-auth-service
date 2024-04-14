@@ -101,7 +101,7 @@ impl Email {
         self.0.is_empty()
     }
 
-    pub fn get_email(&self) -> &String {
+    pub fn as_str(&self) -> &String {
         &self.0
     }
 }
@@ -141,7 +141,7 @@ impl Password {
         self.0.is_empty()
     }
 
-    pub fn get_password(&self) -> &String {
+    pub fn as_str(&self) -> &String {
         &self.0
     }
 }

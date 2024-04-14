@@ -88,7 +88,7 @@ impl Mongo {
         &self,
         data: UserVerificationCode
     ) -> Result<Option<UserVerificationCode>, String> {
-        let filter = doc! { "email": data.email.get_email(), "code": data.code };
+        let filter = doc! { "email": data.email.as_str(), "code": data.code };
         let res = self.verification_codes_col.find_one(filter, None).ok().expect("");
         Ok(res)
     }

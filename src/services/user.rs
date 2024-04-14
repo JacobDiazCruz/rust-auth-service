@@ -39,7 +39,7 @@ pub async fn register_user_service(
     let email = Email::parse(String::from(&form.email))?;
 
     // check if email exists
-    let email_exist = app_state.db.get_user_by_email(email.get_email().clone());
+    let email_exist = app_state.db.get_user_by_email(email.as_str().clone());
 
     if let Some(_) = email_exist.unwrap() {
         Err((StatusCode::BAD_REQUEST, Json(json_response("Email already exist."))))
@@ -48,10 +48,10 @@ pub async fn register_user_service(
         let password = Password::parse(String::from(&form.password))?;
         let hashed_password = Password::hash(&password);
         let cloned_email = email.clone();
-        let new_user_builder = UserBuilder::new(name, email, LoginTypes::MANUAL)
+        let new_user = UserBuilder::new(name, email, LoginTypes::MANUAL)
             .password(hashed_password.unwrap())
-            .is_verified(false);
-        let new_user = new_user_builder.build();
+            .is_verified(false)
+            .build();
 
         let _ = smtp_service(State(app_state.clone()), cloned_email);
         match app_state.db.create_user(&new_user) {
@@ -82,7 +82,7 @@ pub fn smtp_service(
             let email = Message::builder()
                 .from("NoBody <your@domain.tld>".parse().unwrap())
                 .reply_to("Yuin <my@email.tld>".parse().unwrap())
-                .to(receiver.get_email().parse().unwrap())
+                .to(receiver.as_str().parse().unwrap())
                 .subject("Your code")
                 .header(ContentType::TEXT_PLAIN)
                 .body(format!("Your verification code is: {}", code))
@@ -133,7 +133,7 @@ pub async fn account_verification_service(
 
     match res {
         Ok(Some(res)) => {
-            let email = res.email.get_email().to_string();
+            let email = res.email.as_str().to_string();
             let update_user_res = app_state.db.update_user_verification(&email);
             match update_user_res {
                 Ok(_) => {
@@ -196,7 +196,7 @@ fn login_response(
                 "refresh_token": refresh_token,
                 "user": {
                     "_id": user_id_str,
-                    "email": data.email.get_email()
+                    "email": data.email.as_str()
                 }
             }
     });
@@ -208,7 +208,7 @@ pub async fn manual_login_user_service(
     Json(form): Json<ManualLoginForm>
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let email = Email::parse(String::from(&form.email))?;
-    let email_str = email.get_email().clone();
+    let email_str = email.as_str().clone();
     let password = Password::parse(String::from(&form.password))?;
 
     let user = app_state.db.get_user_by_email(email_str);
@@ -223,8 +223,8 @@ pub async fn manual_login_user_service(
                 ));
 
             let is_pw_verified = bcrypt::verify(
-                password.get_password(),
-                &user_password.unwrap().get_password()
+                password.as_str(),
+                &user_password.unwrap().as_str()
             );
             if !is_pw_verified.unwrap() {
                 return Err((StatusCode::BAD_REQUEST, Json(json_response("Wrong password!"))));
@@ -253,7 +253,7 @@ pub async fn login_google_user_service(
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let name = form.name.clone();
     let email = Email::parse(String::from(&form.email)).unwrap();
-    let email_str = email.get_email().clone();
+    let email_str = email.as_str().clone();
 
     // Note: Add verify id_token here in the future
 
@@ -264,8 +264,9 @@ pub async fn login_google_user_service(
         return Ok((StatusCode::OK, Json(response)));
     }
 
-    let new_user_builder = UserBuilder::new(name, email, LoginTypes::GOOGLE).is_verified(true);
-    let new_user_payload = new_user_builder.build();
+    let new_user_payload = UserBuilder::new(name, email, LoginTypes::GOOGLE)
+        .is_verified(true)
+        .build();
     let new_user = app_state.db.create_user(&new_user_payload);
     let new_user_details = get_user_by_id_service(
         State(app_state.clone()),
