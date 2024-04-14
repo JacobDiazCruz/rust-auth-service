@@ -1,6 +1,6 @@
 use mongodb::{
     bson::{ extjson::de::Error, doc, oid::ObjectId },
-    results::{ InsertOneResult, UpdateResult },
+    results::{ InsertOneResult, UpdateResult, DeleteResult },
     sync::{ Client, Collection },
 };
 use std::env;
@@ -89,13 +89,8 @@ impl Mongo {
         data: UserVerificationCode
     ) -> Result<Option<UserVerificationCode>, String> {
         let filter = doc! { "email": data.email.get_email(), "code": data.code };
-        match self.verification_codes_col.find_one(filter, None) {
-            Ok(verif_code_data) => Ok(verif_code_data),
-            Err(_) => {
-                println!("Error. code did not match!");
-                Err("".to_string())
-            }
-        }
+        let res = self.verification_codes_col.find_one(filter, None).ok().expect("");
+        Ok(res)
     }
 
     pub fn update_user_verification(&self, email: &str) -> Result<UpdateResult, Error> {
@@ -118,14 +113,14 @@ impl Mongo {
         Ok(result)
     }
 
-    pub fn delete_refresh_token(&self, refresh_token: String) -> Result<String, Error> {
+    pub fn delete_refresh_token(&self, refresh_token: String) -> Result<DeleteResult, Error> {
         let filter = doc! {
             "refresh_token": refresh_token
         };
-        let _ = self.refresh_tokens_col
+        let res = self.refresh_tokens_col
             .delete_many(filter, None)
             .ok()
             .expect("Error in Deleting Refresh Token");
-        Ok("Refresh token deleted!".to_string())
+        Ok(res)
     }
 }

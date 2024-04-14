@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use axum::http::HeaderValue;
+
 use axum::response::Result;
 use axum::extract::Json;
 use axum::{ http::StatusCode, response::IntoResponse, extract::State };
@@ -11,7 +11,7 @@ use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::form_data::LoginForm,
     helpers::{ obj_id_converter::Converter, form_data::{ VerificationCodeForm, RegisterForm } },
-    helpers::{ jwt::{ sign_jwt, get_token }, form_data::ManualLoginForm },
+    helpers::{ jwt::sign_jwt, form_data::ManualLoginForm },
 };
 
 use serde_json::{ json, Value };
@@ -90,8 +90,6 @@ pub fn smtp_service(
                 .header(ContentType::TEXT_PLAIN)
                 .body(format!("Your verification code is: {}", code))
                 .unwrap();
-
-            println!("{}", conf.google_smtp_username);
 
             let creds = Credentials::new(
                 conf.google_smtp_username.into(),
@@ -182,12 +180,12 @@ fn login_response(
         }
     };
 
-    let access_token = sign_jwt(&user_id_str).unwrap();
-    let refresh_token = sign_jwt(&user_id_str).unwrap();
+    let access_token = sign_jwt(&user_id_str, 5).unwrap();
+    let refresh_token = sign_jwt(&user_id_str, 1440).unwrap();
     let refresh_token_data = RefreshToken {
         id: None,
         user_id: data.id.into(),
-        email: data.email,
+        email: data.email.clone(),
         refresh_token: refresh_token.clone(),
     };
 
@@ -199,6 +197,10 @@ fn login_response(
             "data": {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
+                "user": {
+                    "_id": user_id_str,
+                    "email": data.email.get_email()
+                }
             }
     });
     return Ok(response);

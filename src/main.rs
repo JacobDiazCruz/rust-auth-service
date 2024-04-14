@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use route::create_router;
 
-pub mod api;
+pub mod handlers;
 pub mod services;
 pub mod database;
 pub mod models;

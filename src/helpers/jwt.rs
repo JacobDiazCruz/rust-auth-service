@@ -2,6 +2,7 @@ use axum::http::HeaderValue;
 use std::time::SystemTime;
 use jsonwebtoken::{ encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey };
 use crate::services::user::json_response;
+use chrono::{ Utc, Duration };
 
 use serde::{ Serialize, Deserialize };
 use axum::{ extract::Json, http::StatusCode };
@@ -13,16 +14,16 @@ struct Claims {
     exp: u64,
 }
 
-pub fn sign_jwt(user_id: &str) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+pub fn sign_jwt(
+    user_id: &str,
+    exp_time_mins: i64
+) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
     let header = Header::new(Algorithm::HS512);
 
-    let current_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs();
+    let current_time = Utc::now().timestamp() as u64;
 
     // Token expires in 1 hour
-    let expiration_time = current_time + 3600;
+    let expiration_time = (Utc::now() + Duration::minutes(exp_time_mins)).timestamp() as u64;
 
     let my_claims = Claims {
         user_id: String::from(user_id),
