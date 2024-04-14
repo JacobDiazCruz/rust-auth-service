@@ -31,3 +31,8 @@ pub struct VerificationCodeForm {
     pub email: String,
     pub code: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LogoutForm {
+    pub refresh_token: String,
+}

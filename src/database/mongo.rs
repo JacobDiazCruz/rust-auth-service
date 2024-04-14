@@ -4,13 +4,15 @@ use mongodb::{
     sync::{ Client, Collection },
 };
 use std::env;
-use crate::{ models::user_model::{ User, UserVerificationCode } };
+use crate::{
+    models::{ user_model::{ User, UserVerificationCode }, refresh_token_model::RefreshToken },
+};
 use serde::{ Serialize, Deserialize };
 
 pub struct Mongo {
     user_col: Collection<User>,
     verification_codes_col: Collection<UserVerificationCode>,
-    invalidated_tokens_col: Collection<InvalidateTokenPayload>,
+    refresh_tokens_col: Collection<RefreshToken>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,9 +29,8 @@ impl Mongo {
         let user_col: Collection<User> = db.collection("users");
         let verification_codes_col: Collection<UserVerificationCode> =
             db.collection("verification_codes");
-        let invalidated_tokens_col: Collection<InvalidateTokenPayload> =
-            db.collection("invalidated_tokens");
-        Mongo { user_col, invalidated_tokens_col, verification_codes_col }
+        let refresh_tokens_col: Collection<RefreshToken> = db.collection("refresh_tokens");
+        Mongo { user_col, refresh_tokens_col, verification_codes_col }
     }
 
     pub fn create_user(&self, new_user: &User) -> Result<InsertOneResult, Error> {
@@ -109,14 +110,22 @@ impl Mongo {
         Ok(res)
     }
 
-    pub fn store_invalidated_token(&self, access_token: String) -> Result<InsertOneResult, Error> {
-        let data = InvalidateTokenPayload {
-            access_token,
-        };
-        let result = self.invalidated_tokens_col
+    pub fn store_refresh_token(&self, data: RefreshToken) -> Result<InsertOneResult, Error> {
+        let result = self.refresh_tokens_col
             .insert_one(data, None)
             .ok()
             .expect("Error Invalidating Token");
         Ok(result)
+    }
+
+    pub fn delete_refresh_token(&self, refresh_token: String) -> Result<String, Error> {
+        let filter = doc! {
+            "refresh_token": refresh_token
+        };
+        let _ = self.refresh_tokens_col
+            .delete_many(filter, None)
+            .ok()
+            .expect("Error in Deleting Refresh Token");
+        Ok("Refresh token deleted!".to_string())
     }
 }

@@ -11,7 +11,7 @@ use crate::{
         account_verification_service,
     },
     helpers::{
-        form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm, RegisterForm },
+        form_data::{ LoginForm, ManualLoginForm, VerificationCodeForm, RegisterForm, LogoutForm },
         jwt::{ sign_jwt, get_token, validate_jwt },
         response::LoginResponse,
     },
@@ -63,12 +63,14 @@ pub async fn login_google_user_api(
     }
 }
 
+// flow:
+// this will delete the refresh token data in db
+// upon logout, this will not revoke the access token, the access token will wait for its expiry.
 pub async fn logout_user_api(
     State(app_state): State<Arc<AppState>>,
-    headers: HeaderMap
+    Json(form): Json<LogoutForm>
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let auth_header = headers.get("Authorization").unwrap();
-    let response = logout_user_service(State(app_state), &auth_header).await;
+    let response = logout_user_service(State(app_state), Json(form)).await;
     match response {
         Ok(data) => Ok(data),
         Err(err) => Err(err),

@@ -5,6 +5,8 @@ use axum::extract::Json;
 use axum::{ http::StatusCode, response::IntoResponse, extract::State };
 
 use crate::AppState;
+use crate::helpers::form_data::LogoutForm;
+use crate::models::refresh_token_model::RefreshToken;
 use crate::{
     models::user_model::{ User, Email, Password, LoginTypes, UserVerificationCode },
     helpers::form_data::LoginForm,
@@ -136,9 +138,7 @@ pub async fn account_verification_service(
 
     match res {
         Ok(Some(res)) => {
-            println!("This is res {:#?}", res);
             let email = res.email.get_email().to_string();
-            println!("my email: {}", email);
             let update_user_res = app_state.db.update_user_verification(&email);
             match update_user_res {
                 Ok(_) => {
@@ -168,7 +168,10 @@ pub async fn get_user_by_id_service(
     }
 }
 
-fn login_response(data: User) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
+fn login_response(
+    State(app_state): State<Arc<AppState>>,
+    data: User
+) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
     let user_id_str = match data.id {
         Some(object_id) => object_id.to_hex(),
         None => {
@@ -178,8 +181,18 @@ fn login_response(data: User) -> Result<Value, (StatusCode, Json<serde_json::Val
             ));
         }
     };
+
     let access_token = sign_jwt(&user_id_str).unwrap();
     let refresh_token = sign_jwt(&user_id_str).unwrap();
+    let refresh_token_data = RefreshToken {
+        id: None,
+        user_id: data.id.into(),
+        email: data.email,
+        refresh_token: refresh_token.clone(),
+    };
+
+    let _ = app_state.db.store_refresh_token(refresh_token_data);
+
     let response =
         json!({
             "message": "User logged in successfully!",
@@ -228,7 +241,7 @@ pub async fn manual_login_user_service(
                     ),
                 ));
             }
-            let response = login_response(user_data).unwrap();
+            let response = login_response(State(app_state), user_data).unwrap();
             Ok((StatusCode::OK, Json(response)))
         }
         Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Handle this mongo error.")))),
@@ -248,19 +261,19 @@ pub async fn login_google_user_service(
     let user = app_state.db.get_user_by_email(email_str);
 
     if let Some(data) = user.unwrap() {
-        let response = login_response(data).unwrap();
+        let response = login_response(State(app_state.clone()), data).unwrap();
         return Ok((StatusCode::OK, Json(response)));
     }
 
     let new_user_payload = User::new(name, email, Some(true), LoginTypes::GOOGLE);
     let new_user = app_state.db.create_user(&new_user_payload);
     let new_user_details = get_user_by_id_service(
-        State(app_state),
+        State(app_state.clone()),
         new_user.unwrap().inserted_id.to_string()
     ).await.unwrap();
 
     if let Some(data) = new_user_details {
-        let response = login_response(data).unwrap();
+        let response = login_response(State(app_state.clone()), data).unwrap();
         Ok((StatusCode::OK, Json(response)))
     } else {
         Err((StatusCode::BAD_REQUEST, Json(json_response("User does not exist."))))
@@ -269,20 +282,11 @@ pub async fn login_google_user_service(
 
 pub async fn logout_user_service(
     State(app_state): State<Arc<AppState>>,
-    auth_header: &HeaderValue
+    Json(form): Json<LogoutForm>
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
-    let token = get_token(&auth_header);
-
-    match token {
-        Ok(val) => {
-            println!("Access Token: {}", val);
-            let res = app_state.db.store_invalidated_token(val.to_string());
-            match res {
-                Ok(_) => Ok((StatusCode::OK, Json(json_response("User logged out successfully!")))),
-                Err(_) =>
-                    Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
-            }
-        }
+    let res = app_state.db.delete_refresh_token(form.refresh_token);
+    match res {
+        Ok(_) => Ok((StatusCode::OK, Json(json_response("User logged out successfully!")))),
         Err(_) => Err((StatusCode::BAD_REQUEST, Json(json_response("Error Invalidating Token")))),
     }
 }
