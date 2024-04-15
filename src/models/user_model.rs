@@ -6,6 +6,8 @@ use axum::{ http::StatusCode };
 use crate::services::user::error_response;
 use axum::{ extract::Json };
 
+#[allow(non_snake_case)]
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]

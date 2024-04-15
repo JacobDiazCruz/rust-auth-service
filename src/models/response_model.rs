@@ -8,6 +8,7 @@ pub struct Response<T = Option<Value>> {
     #[serde(skip_serializing, skip_deserializing)]
     pub response_type: StatusCode,
     pub status: Status,
+    pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,6 +22,7 @@ pub struct ResponseBuilder<T = Option<Value>> {
     #[serde(skip_serializing, skip_deserializing)]
     pub response_type: StatusCode,
     pub status: Status,
+    pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,18 +38,24 @@ pub struct Status {
 }
 
 impl<T: Serialize> ResponseBuilder<T> {
-    pub fn new(status_code: StatusCode, message: &str) -> Self {
+    pub fn new(status_code: StatusCode) -> Self {
         let status = Status {
-            message: message.to_string(),
+            message: status_code.to_string(),
             code: status_code.as_u16(),
         };
         Self {
             response_type: status_code,
             status,
+            message: String::new(),
             data: None,
             error: None,
             meta: None,
         }
+    }
+
+    pub fn message(mut self, message: &str) -> Self {
+        self.message = message.to_string();
+        self
     }
 
     pub fn data(mut self, data: T) -> Self {

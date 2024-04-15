@@ -27,7 +27,7 @@ use rand::{ thread_rng, Rng };
 use crate::config::config::Config;
 
 pub fn error_response(message: &str, status_code: StatusCode) -> (StatusCode, Json<Value>) {
-    ResponseBuilder::<Value>::new(status_code, message).build()
+    ResponseBuilder::<Value>::new(status_code).message(message).build()
 }
 
 pub fn success_response<T: Serialize>(
@@ -35,7 +35,7 @@ pub fn success_response<T: Serialize>(
     status_code: StatusCode,
     data: T
 ) -> (StatusCode, Json<Value>) {
-    ResponseBuilder::new(status_code, message).data(data).build()
+    ResponseBuilder::new(status_code).message(message).data(data).build()
 }
 
 pub async fn register_user_service(
@@ -167,7 +167,7 @@ pub async fn get_user_by_id_service(
 fn login_response(
     State(app_state): State<Arc<AppState>>,
     data: User
-) -> Result<Value, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let user_id_str = match data.id {
         Some(object_id) => object_id.to_hex(),
         None => {
@@ -185,47 +185,44 @@ fn login_response(
     };
 
     let _ = app_state.db.store_refresh_token(refresh_token_data);
-
-    let response =
+    let data =
         json!({
-            "message": "User logged in successfully!",
-            "data": {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "user": {
                     "_id": user_id_str,
                     "email": data.email.as_str()
                 }
-            }
     });
+
+    let response = success_response("User logged in successfully!", StatusCode::OK, data);
     return Ok(response);
 }
 
+// parse the email and password when a user is found.
 pub async fn manual_login_user_service(
     State(app_state): State<Arc<AppState>>,
     Json(form): Json<ManualLoginForm>
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let email = Email::parse(String::from(&form.email))?;
-    let email_str = email.as_str().clone();
-    let password = Password::parse(String::from(&form.password))?;
-
-    let user = app_state.db.get_user_by_email(email_str);
+    let user = app_state.db.get_user_by_email(form.email.clone());
     match user {
-        Ok(data) => {
-            let user_data = data.unwrap();
+        Ok(Some(data)) => {
+            let password = Password::parse(String::from(&form.password))?;
+            let user_data = data;
             let user_password = user_data.password
                 .as_ref()
                 .ok_or_else(|| (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Can't get user password".to_string()),
                 ));
+            let email = Email::parse(String::from(&form.email))?;
 
             let is_pw_verified = bcrypt::verify(
                 password.as_str(),
                 &user_password.unwrap().as_str()
             );
             if !is_pw_verified.unwrap() {
-                return Err(error_response("Wrong password!", StatusCode::BAD_REQUEST));
+                return Err(error_response("Wrong password.", StatusCode::BAD_REQUEST));
             }
 
             // If user is not verified yet, send a code to their email.
@@ -239,8 +236,9 @@ pub async fn manual_login_user_service(
                 );
             }
             let response = login_response(State(app_state), user_data).unwrap();
-            Ok((StatusCode::OK, Json(response)))
+            Ok(response)
         }
+        Ok(None) => Err(error_response("Wrong email.", StatusCode::BAD_REQUEST)),
         Err(_) =>
             Err(error_response("Handle this mongo error.", StatusCode::INTERNAL_SERVER_ERROR)),
     }
@@ -260,7 +258,7 @@ pub async fn login_google_user_service(
 
     if let Some(data) = user.unwrap() {
         let response = login_response(State(app_state.clone()), data).unwrap();
-        return Ok((StatusCode::OK, Json(response)));
+        return Ok(response);
     }
 
     let new_user_payload = UserBuilder::new(name, email, LoginTypes::GOOGLE)
@@ -274,7 +272,7 @@ pub async fn login_google_user_service(
 
     if let Some(data) = new_user_details {
         let response = login_response(State(app_state.clone()), data).unwrap();
-        Ok((StatusCode::OK, Json(response)))
+        Ok(response)
     } else {
         Err(error_response("User does not exist.", StatusCode::BAD_REQUEST))
     }
